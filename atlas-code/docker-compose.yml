@@ -1,0 +1,139 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # CODE-SERVER (VS Code in Browser)
+  # ===========================================
+  code-server:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.code-server
+    container_name: ally-code-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./workspace:/home/coder/workspace
+    environment:
+      - PASSWORD=demo123
+      - CLAUDE_MCP_SERVERS=/home/coder/.claude/mcp-config.json
+    depends_on:
+      - neo4j
+      - opensearch
+      - mcp-knowledge-core
+      - mcp-gitlab
+    networks:
+      - ally-network
+
+  # ===========================================
+  # KNOWLEDGE CORE - Graph Database
+  # ===========================================
+  neo4j:
+    image: neo4j:5-community
+    container_name: ally-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/allyfinancial
+    volumes:
+      - neo4j-data:/data
+      - ./data/neo4j-init.cypher:/var/lib/neo4j/import/init.cypher
+    networks:
+      - ally-network
+
+  # ===========================================
+  # KNOWLEDGE CORE - Vector Search
+  # ===========================================
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: ally-opensearch
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=AllyDemo123!
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    networks:
+      - ally-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # CACHE
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    container_name: ally-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - ally-network
+
+  # ===========================================
+  # MCP SERVER - Knowledge Core
+  # ===========================================
+  mcp-knowledge-core:
+    build:
+      context: ./mcp-servers/knowledge-core
+      dockerfile: Dockerfile
+    container_name: ally-mcp-knowledge-core
+    ports:
+      - "3001:3001"
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=allyfinancial
+      - OPENSEARCH_URL=http://opensearch:9200
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - neo4j
+      - opensearch
+      - redis
+    networks:
+      - ally-network
+    restart: on-failure
+
+  # ===========================================
+  # MCP SERVER - GitLab Mock
+  # ===========================================
+  mcp-gitlab:
+    build:
+      context: ./mcp-servers/gitlab-mock
+      dockerfile: Dockerfile
+    container_name: ally-mcp-gitlab
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./workspace:/workspace
+    networks:
+      - ally-network
+
+  # ===========================================
+  # WEBHOOK RECEIVER (Simulates GitLab webhooks)
+  # ===========================================
+  webhook-receiver:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.webhook
+    container_name: ally-webhook-receiver
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./scripts:/scripts
+    networks:
+      - ally-network
+
+networks:
+  ally-network:
+    driver: bridge
+
+volumes:
+  neo4j-data:
+  opensearch-data:
+  claude-config:

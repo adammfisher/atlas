@@ -1,0 +1,18 @@
+{
+  "name": "atlas-web",
+  "version": "1.0.0",
+  "description": "Enterprise AI research interface with AWS Lambda + Bedrock backend.",
+  "main": "local-server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.958.0",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "neo4j-driver": "^6.0.1"
+  }
+}

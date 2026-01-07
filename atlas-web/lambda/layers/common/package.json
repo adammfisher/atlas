@@ -1,0 +1,13 @@
+{
+  "name": "atlas-lambda-common",
+  "version": "1.0.0",
+  "description": "Common dependencies for Atlas Lambda functions",
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.450.0",
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/client-s3": "^3.450.0",
+    "@aws-sdk/lib-dynamodb": "^3.450.0",
+    "@aws-sdk/s3-request-presigner": "^3.450.0",
+    "jszip": "^3.10.1"
+  }
+}

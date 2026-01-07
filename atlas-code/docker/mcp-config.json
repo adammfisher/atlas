@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "knowledge-core": {
+      "command": "node",
+      "args": ["/home/coder/.mcp/knowledge-core-client.js"],
+      "env": {
+        "MCP_SERVER_URL": "http://mcp-knowledge-core:3001"
+      }
+    },
+    "gitlab": {
+      "command": "node", 
+      "args": ["/home/coder/.mcp/gitlab-client.js"],
+      "env": {
+        "MCP_SERVER_URL": "http://mcp-gitlab:3002"
+      }
+    }
+  }
+}

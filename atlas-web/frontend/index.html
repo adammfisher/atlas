@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Atlas Web</title>
+    <script>
+      // Apply color mode before React loads to prevent flash
+      (function() {
+        try {
+          var stored = localStorage.getItem('ally-chat-store');
+          if (stored) {
+            var data = JSON.parse(stored);
+            var colorMode = data.state && data.state.colorMode;
+            if (colorMode === 'light') {
+              document.documentElement.classList.add('light-mode');
+            } else if (colorMode === 'dark') {
+              document.documentElement.classList.add('dark-mode');
+            } else if (colorMode === 'auto') {
+              var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+              document.documentElement.classList.add(prefersDark ? 'dark-mode' : 'light-mode');
+            } else {
+              document.documentElement.classList.add('dark-mode');
+            }
+          } else {
+            document.documentElement.classList.add('dark-mode');
+          }
+        } catch (e) {
+          document.documentElement.classList.add('dark-mode');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

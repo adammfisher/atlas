@@ -1,0 +1,173 @@
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&family=Merriweather:wght@300;400;700&family=Poppins:wght@300;400;500;600;700&family=Open+Dyslexic:wght@400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base typography - Exact Claude styles */
+@layer base {
+  :root {
+    --font-sans: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: 'Merriweather', Georgia, 'Times New Roman', Times, serif;
+    --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Monaco, monospace;
+    --font-lato: 'Lato', sans-serif;
+
+    /* Dark mode colors (default) */
+    --bg-primary: hsl(60, 2.7%, 14.5%);
+    --bg-secondary: hsl(30, 3.3%, 11.8%);
+    --bg-tertiary: hsl(30, 3.3%, 18%);
+    --bg-input: hsl(30, 3.3%, 11.8%);
+    --bg-user-bubble: hsl(30, 3.3%, 18%);
+    --text-primary: hsl(48, 33.3%, 97.1%);
+    --text-secondary: hsl(50, 9%, 73.7%);
+    --text-muted: hsl(48, 4.8%, 59.2%);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-opacity: 1;
+  }
+
+  /* Light mode overrides - Claude.ai warm cream style */
+  .light-mode {
+    --bg-primary: #F9F7F3;           /* Warm cream/off-white background */
+    --bg-secondary: #F3F1EC;         /* Slightly darker cream */
+    --bg-tertiary: #EAE7E0;          /* Warm gray for tertiary elements */
+    --bg-input: #FFFFFF;             /* Pure white for inputs */
+    --bg-user-bubble: #f0eee6;       /* User chat bubble - warm beige */
+    --text-primary: #1F1F1E;         /* Near black for primary text */
+    --text-secondary: #4A4A48;       /* Dark gray for body text */
+    --text-muted: #7C7C79;           /* Medium gray for muted text */
+    --border-color: rgba(0, 0, 0, 0.08); /* Subtle borders */
+    --border-opacity: 1;
+  }
+
+  /* Explicit dark mode */
+  .dark-mode {
+    --bg-primary: hsl(60, 2.7%, 14.5%);
+    --bg-secondary: hsl(30, 3.3%, 11.8%);
+    --bg-tertiary: hsl(30, 3.3%, 18%);
+    --bg-input: hsl(30, 3.3%, 11.8%);
+    --bg-user-bubble: hsl(30, 3.3%, 18%);
+    --text-primary: hsl(48, 33.3%, 97.1%);
+    --text-secondary: hsl(50, 9%, 73.7%);
+    --text-muted: hsl(48, 4.8%, 59.2%);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-opacity: 1;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-weight: 400;
+  }
+
+  code {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #525252;
+}
+
+/* Message streaming cursor (legacy) */
+.streaming-cursor::after {
+  content: '▊';
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Shimmer loading effect */
+.shimmer-text {
+  font-size: 1.1rem;
+  font-weight: 500;
+  background: linear-gradient(90deg, #888 25%, #fff 50%, #888 75%);
+  background-size: 400% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 1.5s infinite linear;
+}
+
+/* Light mode shimmer */
+.light-mode .shimmer-text {
+  background: linear-gradient(90deg, #666 25%, #000 50%, #666 75%);
+  background-size: 400% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 1.5s infinite linear;
+}
+
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Streaming loader animation */
+.streaming-loader {
+  width: 14px;
+  height: 14px;
+  position: relative;
+  --c: no-repeat linear-gradient(#CD477E 0 0);
+  background:
+    var(--c) center/100% 3px,
+    var(--c) center/3px 100%;
+}
+.streaming-loader:before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    var(--c) 0 0,
+    var(--c) 100% 0,
+    var(--c) 0 100%,
+    var(--c) 100% 100%;
+  background-size: 5.5px 5.5px;
+  animation: streaming-loader-anim 0.8s infinite cubic-bezier(0.3, 1, 0, 1);
+}
+@keyframes streaming-loader-anim {
+  33% { inset: -3px; transform: rotate(0deg); }
+  66% { inset: -3px; transform: rotate(90deg); }
+  100% { inset: 0; transform: rotate(90deg); }
+}
+
+/* Insights bubble animation */
+@keyframes pulse-subtle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+/* Remove prose styling - we're handling it in components */
+
+/* Light mode scrollbar */
+.light-mode ::-webkit-scrollbar-thumb {
+  background: #D4D2CD;
+}
+
+.light-mode ::-webkit-scrollbar-thumb:hover {
+  background: #B8B6B1;
+}
