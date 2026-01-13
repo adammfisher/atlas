@@ -240,7 +240,7 @@ let pendingInsights = [];
  * This endpoint combines message + knowledge_context for Claude, but sends clean message for storage
  */
 app.post('/api/chat/message/stream', async (req, res) => {
-  const { message, knowledge_context, files, session_id, project_id, model = 'sonnet', web_search_enabled = true } = req.body;
+  const { message, knowledge_context, files, session_id, project_id, model = 'haiku', web_search_enabled = true } = req.body;
 
   console.log(`\n[Chat] Proxying to AWS: "${message?.substring(0, 50) || '(no message)'}..."`);
   if (knowledge_context) {
@@ -420,7 +420,7 @@ app.post('/api/chat/message/stream', async (req, res) => {
  * Files are already base64 encoded from the frontend
  */
 app.post('/api/chat/message/with-files/stream', async (req, res) => {
-  const { message, files, session_id, project_id, model = 'sonnet', web_search_enabled = true } = req.body;
+  const { message, files, session_id, project_id, model = 'haiku', web_search_enabled = true } = req.body;
 
   console.log(`\n[Chat+Files] Proxying to AWS: "${message?.substring(0, 50) || '(no message)'}..."`);
   console.log(`[Chat+Files] With ${files?.length || 0} files`);
@@ -494,6 +494,27 @@ app.get('/api/sessions', async (req, res) => {
   }
 });
 
+// Create session - proxy to AWS backend
+app.post('/api/sessions', async (req, res) => {
+  try {
+    console.log('[Proxy] Creating session with data:', req.body);
+    const response = await fetch(`${AWS_API_URL}/api/sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    console.log('[Proxy] Session created:', data);
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Create session error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete session - proxy to AWS backend
 app.delete('/api/sessions/:sessionId', async (req, res) => {
   const { sessionId } = req.params;
@@ -550,9 +571,209 @@ app.get('/api/projects', async (req, res) => {
   }
 });
 
+// Create project
+app.post('/api/projects', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Create project error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single project
+app.get('/api/projects/:projectId', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}`, {
+      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Get project error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update project
+app.put('/api/projects/:projectId', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Update project error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete project
+app.delete('/api/projects/:projectId', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}`, {
+      method: 'DELETE',
+      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Delete project error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Project files
+app.get('/api/projects/:projectId/files', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/files`, {
+      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Get project files error:', error.message);
+    res.json({ files: [] });
+  }
+});
+
+// Upload file to project
+app.post('/api/projects/:projectId/files', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/files`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Upload file error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Toggle file pin
+app.put('/api/projects/:projectId/files/:fileId/pin', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/files/${req.params.fileId}/pin`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Toggle pin error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete file from project
+app.delete('/api/projects/:projectId/files/:fileId', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/files/${req.params.fileId}`, {
+      method: 'DELETE',
+      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Delete file error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Project memory
+app.get('/api/projects/:projectId/memory', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/memory`, {
+      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Get memory error:', error.message);
+    res.json(null);
+  }
+});
+
+// Update project memory
+app.put('/api/projects/:projectId/memory', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/memory`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Update memory error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Regenerate project memory
+app.post('/api/projects/:projectId/memory/regenerate', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/memory/regenerate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Regenerate memory error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Project chats
+app.get('/api/projects/:projectId/chats', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/chats`, {
+      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Get project chats error:', error.message);
+    res.json({ chats: [] });
+  }
+});
+
 // Settings endpoint - returns default model settings
+// Currently only Haiku is enabled for cost control
 app.get('/api/settings/model', (req, res) => {
-  res.json({ model: 'sonnet', available: ['haiku', 'sonnet'] });
+  res.json({ model: 'haiku', available: ['haiku'] });
 });
 
 // Mock mode setting - disabled by default

@@ -20,10 +20,23 @@ resource "aws_dynamodb_table" "sessions" {
     type = "N"
   }
 
+  attribute {
+    name = "projectId"
+    type = "S"
+  }
+
   # GSI for listing sessions by update time
   global_secondary_index {
     name            = "userId-updatedAt-index"
     hash_key        = "userId"
+    range_key       = "updatedAt"
+    projection_type = "ALL"
+  }
+
+  # GSI for listing sessions by project
+  global_secondary_index {
+    name            = "projectId-updatedAt-index"
+    hash_key        = "projectId"
     range_key       = "updatedAt"
     projection_type = "ALL"
   }
@@ -68,9 +81,23 @@ resource "aws_dynamodb_table" "projects" {
     name = "projectId"
     type = "S"
   }
+
+  attribute {
+    name = "lastActivityAt"
+    type = "N"
+  }
+
+  # GSI for listing projects by last activity
+  global_secondary_index {
+    name            = "userId-lastActivityAt-index"
+    hash_key        = "userId"
+    range_key       = "lastActivityAt"
+    projection_type = "ALL"
+  }
 }
 
 # Project files table - stores file references for projects
+# Enhanced for Projects feature: pinned status, token count, processing status
 resource "aws_dynamodb_table" "project_files" {
   name         = "${var.project_name}-project-files"
   billing_mode = "PAY_PER_REQUEST"
@@ -85,6 +112,20 @@ resource "aws_dynamodb_table" "project_files" {
   attribute {
     name = "fileId"
     type = "S"
+  }
+
+  attribute {
+    name = "pinned"
+    type = "S"
+  }
+
+  # GSI for quickly fetching pinned files for context assembly
+  # pinned values: "true" or "false" (stored as string for GSI compatibility)
+  global_secondary_index {
+    name            = "projectId-pinned-index"
+    hash_key        = "projectId"
+    range_key       = "pinned"
+    projection_type = "ALL"
   }
 }
 
@@ -157,4 +198,30 @@ resource "aws_dynamodb_table" "summaries" {
     attribute_name = "ttl"
     enabled        = true
   }
+}
+
+# Project Memory table - stores synthesized memory from conversations
+# Memory is versioned to support rollback and audit trail
+resource "aws_dynamodb_table" "project_memory" {
+  name         = "${var.project_name}-project-memory"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "projectId"
+  range_key    = "version"
+
+  attribute {
+    name = "projectId"
+    type = "S"
+  }
+
+  attribute {
+    name = "version"
+    type = "N"
+  }
+
+  # Memory items include:
+  # - sections: { purposeContext, currentState, onTheHorizon, keyLearnings, approachPatterns, toolsResources }
+  # - processedChatIds: array of session IDs that contributed to this memory
+  # - current: boolean indicating this is the latest version
+  # - generatedAt: timestamp
+  # - tokenCount: estimated tokens for budget tracking
 }

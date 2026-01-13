@@ -4,6 +4,8 @@ import Sidebar from './components/ProjectSidebar/Sidebar'
 import ChatView from './components/Chat/ChatView'
 import InsightsBubble from './components/InsightsBubble/InsightsBubble'
 import ArtifactsPanel from './components/Artifacts/ArtifactsPanel'
+import ProjectDetailView from './components/Project/ProjectDetailView'
+import ProjectsListPage from './components/Project/ProjectsListPage'
 import { useChatStore } from './hooks/useChatStore'
 import { insightsService } from './services/insightsService'
 import { useInsightsStore } from './hooks/useInsightsStore'
@@ -268,6 +270,18 @@ function App() {
                   fontFamily={fontFamilies[chatFont] || fontFamilies.default}
                 />
               }
+            />
+            <Route
+              path="/projects"
+              element={<ProjectsListPage />}
+            />
+            <Route
+              path="/projects/:projectId"
+              element={<ProjectDetailView />}
+            />
+            <Route
+              path="/project/:projectId/settings"
+              element={<ProjectDetailView />}
             />
             <Route
               path="/project/:projectId"

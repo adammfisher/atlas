@@ -18,6 +18,7 @@ import {
   LogOut,
   ChevronUp
 } from 'lucide-react'
+// Note: Some of these icons may be unused after removing the expandable Projects section
 import { useChatStore } from '../../hooks/useChatStore'
 import { sessionsService, artifactsService } from '../../services/chatService'
 import SettingsModal from '../Settings/SettingsModal'
@@ -45,7 +46,6 @@ function AllyLogo({ className = "" }) {
 function Sidebar() {
   const navigate = useNavigate()
   const { projectId } = useParams()
-  const [projectsExpanded, setProjectsExpanded] = useState(false)
   const [artifactsExpanded, setArtifactsExpanded] = useState(false)
   const [hoveredChat, setHoveredChat] = useState(null)
   const [openMenuId, setOpenMenuId] = useState(null)
@@ -53,8 +53,6 @@ function Sidebar() {
   const [renameValue, setRenameValue] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [showSearch, setShowSearch] = useState(false)
-  const [showNewProjectModal, setShowNewProjectModal] = useState(false)
-  const [newProjectName, setNewProjectName] = useState('')
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showMCPSettingsModal, setShowMCPSettingsModal] = useState(false)
@@ -64,17 +62,12 @@ function Sidebar() {
 
   const {
     sessions,
-    setSessions,
-    projects,
     currentSessionId,
     clearMessages,
-    addProject,
     updateSessionTitle,
     toggleSessionStar,
     deleteSession,
-    addSessionToProject,
-    user,
-    _hasHydrated
+    user
   } = useChatStore()
 
   // State for artifacts loaded from backend
@@ -180,20 +173,6 @@ function Sidebar() {
   const handleNewChat = () => {
     clearMessages()
     navigate(projectId ? `/project/${projectId}` : '/')
-  }
-
-  const handleCreateProject = () => {
-    if (newProjectName.trim()) {
-      addProject({
-        id: `proj_${Date.now()}`,
-        name: newProjectName.trim(),
-        description: '',
-        instructions: ''
-      })
-      setNewProjectName('')
-      setShowNewProjectModal(false)
-      setProjectsExpanded(true)
-    }
   }
 
   // Chat menu handlers
@@ -337,56 +316,18 @@ function Sidebar() {
 
       {/* Navigation Sections */}
       <div className="flex-1 overflow-y-auto px-3">
-        {/* Projects Section */}
+        {/* Projects Link */}
         <div className="mb-2">
-          <button
-            onClick={() => setProjectsExpanded(!projectsExpanded)}
+          <Link
+            to="/projects"
             className="flex items-center gap-2 w-full px-2 py-1.5 text-[13px] rounded-lg transition-colors"
             style={{ color: 'var(--text-primary)' }}
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           >
-            {projectsExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             <FolderOpen size={14} />
             <span>Projects</span>
-          </button>
-
-          {projectsExpanded && (
-            <div className="mt-1">
-              {projects.length === 0 ? (
-                <p className="text-[12px] pl-8 py-1.5" style={{ color: 'var(--text-muted)' }}>
-                  No projects yet
-                </p>
-              ) : (
-                projects.map(project => (
-                  <Link
-                    key={project.id}
-                    to={`/project/${project.id}`}
-                    className="block py-1.5 px-2 pl-8 text-[13px] rounded-lg truncate transition-colors"
-                    style={{
-                      color: 'var(--text-primary)',
-                      backgroundColor: projectId === project.id ? 'var(--bg-tertiary)' : 'transparent'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
-                    onMouseLeave={(e) => projectId !== project.id && (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    {project.name}
-                  </Link>
-                ))
-              )}
-              {/* New Project Button */}
-              <button
-                onClick={() => setShowNewProjectModal(true)}
-                className="w-full flex items-center gap-2 py-1.5 px-2 pl-8 text-[13px] rounded-lg transition-colors"
-                style={{ color: '#CD477E' }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                <Plus size={12} />
-                <span>New project</span>
-              </button>
-            </div>
-          )}
+          </Link>
         </div>
 
         {/* Artifacts Section */}
@@ -634,46 +575,6 @@ function Sidebar() {
           )}
         </div>
       </div>
-
-      {/* New Project Modal */}
-      {showNewProjectModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-xl border border-[var(--border-color)] p-4 w-80 shadow-xl" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-            <h3 className="text-[15px] font-medium mb-3" style={{ color: 'var(--text-primary)' }}>
-              Create New Project
-            </h3>
-            <input
-              type="text"
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              placeholder="Project name"
-              className="w-full border border-[var(--border-color)] rounded-lg px-3 py-2 text-[14px] outline-none focus:border-opacity-30 mb-3"
-              style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-              autoFocus
-              onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
-            />
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => { setShowNewProjectModal(false); setNewProjectName('') }}
-                className="px-3 py-1.5 text-[13px] rounded-lg transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateProject}
-                disabled={!newProjectName.trim()}
-                className="px-3 py-1.5 text-[13px] bg-[#CD477E] hover:bg-[#b33d6d] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
-                style={{ color: 'white' }}
-              >
-                Create
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Settings Modal */}
       <SettingsModal

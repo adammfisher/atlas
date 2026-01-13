@@ -279,6 +279,15 @@ export const sessionsService = {
     if (!res.ok) throw new Error('Failed to list sessions')
     return (await res.json()).sessions
   },
+  async create(data = {}) {
+    const res = await fetch(`${API_URL}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      body: JSON.stringify(data)
+    })
+    if (!res.ok) throw new Error('Failed to create session')
+    return res.json()
+  },
   async getMessages(sessionId) {
     const res = await fetch(`${API_URL}/api/sessions/${sessionId}/messages`, { headers: getUserIdHeader() })
     if (!res.ok) throw new Error('Failed to get messages')
@@ -296,44 +305,66 @@ export const sessionsService = {
 }
 
 export const projectsService = {
-  async list() {
-    const res = await fetch(`${API_URL}/api/projects`, { headers: getUserIdHeader() })
+  async list(status = 'active') {
+    const res = await fetch(`${API_URL}/api/projects?status=${status}`, { headers: getUserIdHeader() })
     if (!res.ok) throw new Error('Failed to list projects')
     return (await res.json()).projects
   },
+
+  async get(projectId) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}`, { headers: getUserIdHeader() })
+    if (!res.ok) throw new Error('Failed to get project')
+    return res.json()
+  },
+
   async create(project) {
     const res = await fetch(`${API_URL}/api/projects`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getUserIdHeader() }, body: JSON.stringify(project) })
     if (!res.ok) throw new Error('Failed to create project')
     return res.json()
   },
+
   async update(projectId, updates) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...getUserIdHeader() }, body: JSON.stringify(updates) })
     if (!res.ok) throw new Error('Failed to update project')
     return res.json()
   },
+
   async delete(projectId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}`, { method: 'DELETE', headers: getUserIdHeader() })
     if (!res.ok) throw new Error('Failed to delete project')
   },
+
+  // File management
   async listFiles(projectId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/files`, { headers: getUserIdHeader() })
     if (!res.ok) throw new Error('Failed to list files')
     return (await res.json()).files
   },
-  async uploadFile(projectId, file) {
+
+  async getFile(projectId, fileId) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}`, { headers: getUserIdHeader() })
+    if (!res.ok) throw new Error('Failed to get file')
+    return res.json()
+  },
+
+  async uploadFile(projectId, file, pinned = false) {
     // Check if it's a zip file - use special endpoint for extraction
     if (file.type === 'application/zip' || file.name.toLowerCase().endsWith('.zip')) {
-      return this.uploadZipFile(projectId, file)
+      return this.uploadZipFile(projectId, file, pinned)
     }
 
-    const presignRes = await fetch(`${API_URL}/api/projects/${projectId}/files`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getUserIdHeader() }, body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size }) })
+    const presignRes = await fetch(`${API_URL}/api/projects/${projectId}/files`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size, pinned })
+    })
     if (!presignRes.ok) throw new Error('Failed to get upload URL')
     const { uploadUrl, file: fileInfo } = await presignRes.json()
     await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
     return fileInfo
   },
 
-  async uploadZipFile(projectId, file) {
+  async uploadZipFile(projectId, file, pinAll = false) {
     // Convert file to base64
     const base64 = await new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -351,16 +382,71 @@ export const projectsService = {
         includeImages: true,
         includeCode: true,
         includeText: true,
-        maxFiles: 50
+        maxFiles: 50,
+        pinAll
       })
     })
 
     if (!res.ok) throw new Error('Failed to upload and extract zip file')
     return res.json()
   },
+
+  async updateFile(projectId, fileId, updates) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      body: JSON.stringify(updates)
+    })
+    if (!res.ok) throw new Error('Failed to update file')
+    return res.json()
+  },
+
+  async toggleFilePin(projectId, fileId, pinned) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}/pin`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      body: JSON.stringify({ pinned })
+    })
+    if (!res.ok) throw new Error('Failed to toggle file pin')
+    return res.json()
+  },
+
   async deleteFile(projectId, fileId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}`, { method: 'DELETE', headers: getUserIdHeader() })
     if (!res.ok) throw new Error('Failed to delete file')
+  },
+
+  // Memory management
+  async getMemory(projectId) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/memory`, { headers: getUserIdHeader() })
+    if (!res.ok) throw new Error('Failed to get project memory')
+    return res.json()
+  },
+
+  async updateMemory(projectId, sections) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/memory`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      body: JSON.stringify({ sections })
+    })
+    if (!res.ok) throw new Error('Failed to update project memory')
+    return res.json()
+  },
+
+  async regenerateMemory(projectId) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/memory/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() }
+    })
+    if (!res.ok) throw new Error('Failed to regenerate project memory')
+    return res.json()
+  },
+
+  // Chats/sessions within a project
+  async listChats(projectId) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/chats`, { headers: getUserIdHeader() })
+    if (!res.ok) throw new Error('Failed to list project chats')
+    return (await res.json()).chats
   }
 }
 

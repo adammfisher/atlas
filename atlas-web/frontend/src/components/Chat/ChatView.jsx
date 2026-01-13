@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { StopCircle } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -14,7 +14,9 @@ import InlineArtifact, { parseMessageForArtifacts, extractTitleFromContent } fro
 function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, onOpenArtifactInPanel, onArtifactStreaming, showArtifacts = false, onArtifactsDetected }) {
   const { sessionId, projectId } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [isStreaming, setIsStreaming] = useState(false)
+  const initialMessageProcessed = useRef(false)
   const [isFirstMessage, setIsFirstMessage] = useState(true)
   const [thinkingSteps, setThinkingSteps] = useState([])
   const [showThinkingSteps, setShowThinkingSteps] = useState(false)
@@ -125,6 +127,26 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
     setIsFirstMessage(messages.length === 0)
   }, [currentSessionId, messages.length])
 
+  // Handle initialMessage from URL parameter (from project detail page)
+  useEffect(() => {
+    const initialMessage = searchParams.get('initialMessage')
+    if (initialMessage && currentSessionId && !initialMessageProcessed.current && !isLoadingMessages) {
+      initialMessageProcessed.current = true
+      // Clear the URL parameter
+      setSearchParams({}, { replace: true })
+      // Send the initial message
+      handleSend({
+        message: decodeURIComponent(initialMessage),
+        files: [],
+        model: 'haiku', // Model selection disabled - using Haiku as default
+        webSearchEnabled: false,
+        extendedThinkingEnabled: false,
+        knowledgeCoreEnabled: false,
+        enabledConnectors: []
+      })
+    }
+  }, [searchParams, currentSessionId, isLoadingMessages])
+
   // Detect artifacts in loaded messages and update count
   // Only run when NOT streaming to avoid constant updates during artifact creation
   useEffect(() => {
@@ -163,7 +185,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
 
     if (isNewSession) {
       // Create a temporary session so messages have somewhere to go
-      tempSessionId = createSession()
+      // Pass projectId if we're in a project context
+      tempSessionId = createSession(null, projectId || null)
       activeSessionId = tempSessionId
     }
 

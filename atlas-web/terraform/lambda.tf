@@ -21,16 +21,17 @@ resource "aws_lambda_function" "chat" {
 
   environment {
     variables = {
-      SESSIONS_TABLE      = aws_dynamodb_table.sessions.name
-      MESSAGES_TABLE      = aws_dynamodb_table.messages.name
-      PROJECTS_TABLE      = aws_dynamodb_table.projects.name
-      PROJECT_FILES_TABLE = aws_dynamodb_table.project_files.name
-      ARTIFACTS_TABLE     = aws_dynamodb_table.artifacts.name
-      SUMMARIES_TABLE     = aws_dynamodb_table.summaries.name
-      UPLOADS_BUCKET      = aws_s3_bucket.uploads.id
-      ARTIFACTS_BUCKET    = aws_s3_bucket.artifacts.id
-      NEO4J_URL           = var.neo4j_url
-      OPENSEARCH_URL      = var.opensearch_url
+      SESSIONS_TABLE        = aws_dynamodb_table.sessions.name
+      MESSAGES_TABLE        = aws_dynamodb_table.messages.name
+      PROJECTS_TABLE        = aws_dynamodb_table.projects.name
+      PROJECT_FILES_TABLE   = aws_dynamodb_table.project_files.name
+      PROJECT_MEMORY_TABLE  = aws_dynamodb_table.project_memory.name
+      ARTIFACTS_TABLE       = aws_dynamodb_table.artifacts.name
+      SUMMARIES_TABLE       = aws_dynamodb_table.summaries.name
+      UPLOADS_BUCKET        = aws_s3_bucket.uploads.id
+      ARTIFACTS_BUCKET      = aws_s3_bucket.artifacts.id
+      NEO4J_URL             = var.neo4j_url
+      OPENSEARCH_URL        = var.opensearch_url
     }
   }
 }
@@ -50,16 +51,17 @@ resource "aws_lambda_function" "chat_stream" {
 
   environment {
     variables = {
-      SESSIONS_TABLE      = aws_dynamodb_table.sessions.name
-      MESSAGES_TABLE      = aws_dynamodb_table.messages.name
-      PROJECTS_TABLE      = aws_dynamodb_table.projects.name
-      PROJECT_FILES_TABLE = aws_dynamodb_table.project_files.name
-      ARTIFACTS_TABLE     = aws_dynamodb_table.artifacts.name
-      SUMMARIES_TABLE     = aws_dynamodb_table.summaries.name
-      UPLOADS_BUCKET      = aws_s3_bucket.uploads.id
-      ARTIFACTS_BUCKET    = aws_s3_bucket.artifacts.id
-      NEO4J_URL           = var.neo4j_url
-      OPENSEARCH_URL      = var.opensearch_url
+      SESSIONS_TABLE        = aws_dynamodb_table.sessions.name
+      MESSAGES_TABLE        = aws_dynamodb_table.messages.name
+      PROJECTS_TABLE        = aws_dynamodb_table.projects.name
+      PROJECT_FILES_TABLE   = aws_dynamodb_table.project_files.name
+      PROJECT_MEMORY_TABLE  = aws_dynamodb_table.project_memory.name
+      ARTIFACTS_TABLE       = aws_dynamodb_table.artifacts.name
+      SUMMARIES_TABLE       = aws_dynamodb_table.summaries.name
+      UPLOADS_BUCKET        = aws_s3_bucket.uploads.id
+      ARTIFACTS_BUCKET      = aws_s3_bucket.artifacts.id
+      NEO4J_URL             = var.neo4j_url
+      OPENSEARCH_URL        = var.opensearch_url
     }
   }
 }
@@ -110,16 +112,19 @@ resource "aws_lambda_function" "projects" {
   handler          = "index.handler"
   source_code_hash = filebase64sha256("${path.module}/../lambda/functions/projects.zip")
   runtime          = "nodejs20.x"
-  timeout          = 30
-  memory_size      = 256
+  timeout          = 120  # Increased for memory generation
+  memory_size      = 512
 
   layers = [aws_lambda_layer_version.common.arn]
 
   environment {
     variables = {
-      PROJECTS_TABLE      = aws_dynamodb_table.projects.name
-      PROJECT_FILES_TABLE = aws_dynamodb_table.project_files.name
-      UPLOADS_BUCKET      = aws_s3_bucket.uploads.id
+      PROJECTS_TABLE        = aws_dynamodb_table.projects.name
+      PROJECT_FILES_TABLE   = aws_dynamodb_table.project_files.name
+      PROJECT_MEMORY_TABLE  = aws_dynamodb_table.project_memory.name
+      SESSIONS_TABLE        = aws_dynamodb_table.sessions.name
+      MESSAGES_TABLE        = aws_dynamodb_table.messages.name
+      UPLOADS_BUCKET        = aws_s3_bucket.uploads.id
     }
   }
 }

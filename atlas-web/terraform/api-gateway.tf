@@ -164,6 +164,56 @@ resource "aws_apigatewayv2_route" "project_files_delete" {
   target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
 }
 
+resource "aws_apigatewayv2_route" "project_file_get" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /api/projects/{projectId}/files/{fileId}"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+resource "aws_apigatewayv2_route" "project_file_update" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "PUT /api/projects/{projectId}/files/{fileId}"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+resource "aws_apigatewayv2_route" "project_file_pin" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "PUT /api/projects/{projectId}/files/{fileId}/pin"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+resource "aws_apigatewayv2_route" "project_files_upload_zip" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /api/projects/{projectId}/files/upload-zip"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+# Project Memory Routes
+resource "aws_apigatewayv2_route" "project_memory_get" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /api/projects/{projectId}/memory"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+resource "aws_apigatewayv2_route" "project_memory_update" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "PUT /api/projects/{projectId}/memory"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+resource "aws_apigatewayv2_route" "project_memory_regenerate" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /api/projects/{projectId}/memory/regenerate"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+# Project Chats Route
+resource "aws_apigatewayv2_route" "project_chats_list" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /api/projects/{projectId}/chats"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
 # ============ Files Routes ============
 resource "aws_apigatewayv2_integration" "files" {
   api_id                 = aws_apigatewayv2_api.main.id

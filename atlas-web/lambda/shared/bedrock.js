@@ -111,11 +111,16 @@ async function executeTool(toolName, toolInput) {
 }
 
 // Claude 4.5 inference profiles
+// NOTE: Currently only Haiku is enabled for cost control
 const MODELS = {
   haiku: 'global.anthropic.claude-haiku-4-5-20251001-v1:0',
-  sonnet: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
-  opus: 'global.anthropic.claude-opus-4-5-20251101-v1:0'
+  // sonnet and opus disabled for now
+  sonnet: 'global.anthropic.claude-haiku-4-5-20251001-v1:0', // Redirects to haiku
+  opus: 'global.anthropic.claude-haiku-4-5-20251001-v1:0'    // Redirects to haiku
 };
+
+// Default model for all requests
+const DEFAULT_MODEL = 'haiku';
 
 // Context window limits (in tokens) - leave headroom for response
 const CONTEXT_LIMITS = {
@@ -179,9 +184,11 @@ function calculateHistoryTokens(messages) {
 }
 
 /**
- * Build system prompt with optional project instructions
+ * Build system prompt with optional project context
+ * @param {Object|string} projectContext - Enhanced project context object or legacy instructions string
+ * @param {boolean} webSearch - Whether web search is enabled
  */
-function buildSystemPrompt(projectInstructions = null, webSearch = false) {
+function buildSystemPrompt(projectContext = null, webSearch = false) {
   let base = `You are a helpful AI research assistant for enterprise users. You help with:
 - Analyzing documents and data
 - Answering questions about business processes
@@ -263,8 +270,50 @@ For HTML:
 
 Be concise but thorough. Use clear formatting when helpful.`;
 
-  if (projectInstructions) {
-    base += `\n\n<project_instructions>\n${projectInstructions}\n</project_instructions>`;
+  // Handle enhanced project context (object) or legacy instructions (string)
+  if (projectContext) {
+    if (typeof projectContext === 'string') {
+      // Legacy: just instructions string
+      base += `\n\n<project_instructions>\n${projectContext}\n</project_instructions>`;
+    } else if (typeof projectContext === 'object') {
+      // Enhanced project context
+      if (projectContext.project) {
+        base += `\n\n<project name="${projectContext.project.name}">`;
+        if (projectContext.project.description) {
+          base += `\n<description>${projectContext.project.description}</description>`;
+        }
+      }
+
+      // Add project instructions
+      if (projectContext.instructions) {
+        base += `\n\n<project_instructions>\n${projectContext.instructions}\n</project_instructions>`;
+      }
+
+      // Add synthesized memory (high-priority context)
+      if (projectContext.memory) {
+        base += `\n\n<project_memory>
+This is synthesized knowledge from previous conversations about this project. Use this context to maintain continuity.
+
+${projectContext.memory}
+</project_memory>`;
+      }
+
+      // Add file manifest (awareness of available files)
+      if (projectContext.fileManifest && projectContext.fileManifest.length > 0) {
+        const manifestText = projectContext.fileManifest
+          .map(f => `- ${f.name} (${f.pinned ? 'PINNED' : 'available'}, ${f.tokenCount} tokens, ${f.status})`)
+          .join('\n');
+        base += `\n\n<available_files>
+The following files are available in this project. Pinned files are included in context below. Other files can be referenced but their contents are not currently loaded.
+
+${manifestText}
+</available_files>`;
+      }
+
+      if (projectContext.project) {
+        base += `\n</project>`;
+      }
+    }
   }
 
   return base;
@@ -272,6 +321,10 @@ Be concise but thorough. Use clear formatting when helpful.`;
 
 /**
  * Build messages array for Bedrock Converse API
+ * @param {Array} history - Conversation history
+ * @param {Object} currentMessage - Current user message with text and files
+ * @param {Object|null} projectContext - Enhanced project context (with pinnedFiles) or legacy format
+ * @param {Object|null} compactedContext - Compacted conversation context from summarization
  */
 function buildMessages(history, currentMessage, projectContext = null, compactedContext = null) {
   const messages = [];
@@ -281,9 +334,8 @@ function buildMessages(history, currentMessage, projectContext = null, compacted
     if (compactedContext.keyPoints) {
       messages.push({
         role: 'user',
-        content: [{ 
+        content: [{
           text: `<conversation_history_key_points>\n${compactedContext.keyPoints}\n</conversation_history_key_points>`,
-          // Cache the compacted context
         }]
       });
       messages.push({
@@ -294,7 +346,7 @@ function buildMessages(history, currentMessage, projectContext = null, compacted
     if (compactedContext.summary) {
       messages.push({
         role: 'user',
-        content: [{ 
+        content: [{
           text: `<recent_conversation_summary>\n${compactedContext.summary}\n</recent_conversation_summary>`,
         }]
       });
@@ -306,21 +358,45 @@ function buildMessages(history, currentMessage, projectContext = null, compacted
   }
 
   // Add project context (if any)
-  if (projectContext && projectContext.files && projectContext.files.length > 0) {
-    const filesContent = projectContext.files
-      .map(f => `<file name="${f.name}">\n${f.content}\n</file>`)
-      .join('\n');
-    
-    messages.push({
-      role: 'user',
-      content: [{ 
-        text: `<project_files>\n${filesContent}\n</project_files>`,
-      }]
-    });
-    messages.push({
-      role: 'assistant',
-      content: [{ text: 'I have loaded the project files and context.' }]
-    });
+  if (projectContext) {
+    // Handle enhanced project context with pinnedFiles
+    if (projectContext.pinnedFiles && projectContext.pinnedFiles.length > 0) {
+      const filesContent = projectContext.pinnedFiles
+        .map(f => `<file name="${f.name}" tokens="${f.tokenCount || 'unknown'}">\n${f.content}\n</file>`)
+        .join('\n');
+
+      messages.push({
+        role: 'user',
+        content: [{
+          text: `<pinned_project_files>
+These files are pinned to this project and should be used as primary context for all responses.
+
+${filesContent}
+</pinned_project_files>`,
+        }]
+      });
+      messages.push({
+        role: 'assistant',
+        content: [{ text: 'I have loaded the pinned project files and will use them as context for our conversation.' }]
+      });
+    }
+    // Handle legacy format with files array
+    else if (projectContext.files && projectContext.files.length > 0) {
+      const filesContent = projectContext.files
+        .map(f => `<file name="${f.name}">\n${f.content}\n</file>`)
+        .join('\n');
+
+      messages.push({
+        role: 'user',
+        content: [{
+          text: `<project_files>\n${filesContent}\n</project_files>`,
+        }]
+      });
+      messages.push({
+        role: 'assistant',
+        content: [{ text: 'I have loaded the project files and context.' }]
+      });
+    }
   }
 
   // Add conversation history

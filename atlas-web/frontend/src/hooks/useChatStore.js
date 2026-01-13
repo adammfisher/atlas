@@ -22,7 +22,7 @@ export const useChatStore = create(
 
       // Input state
       pendingFiles: [],
-      selectedModel: 'haiku',
+      selectedModel: 'haiku', // Default model - model selection disabled
       webSearchEnabled: true,
       extendedThinkingEnabled: false,
       knowledgeCoreEnabled: true,  // Knowledge Core semantic search enabled by default
@@ -53,13 +53,13 @@ export const useChatStore = create(
       // Actions - Session
       setCurrentSession: (sessionId) => set({ currentSessionId: sessionId }),
 
-      createSession: (title = null) => {
+      createSession: (title = null, projectId = null) => {
         const sessionId = `session_${Date.now()}`
         const session = {
           id: sessionId,
           title: title || null,
           starred: false,
-          projectId: null,
+          projectId: projectId || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         }
@@ -238,6 +238,12 @@ export const useChatStore = create(
 
       addProject: (project) => set((state) => ({
         projects: [...state.projects, project]
+      })),
+
+      updateProject: (projectId, updates) => set((state) => ({
+        projects: state.projects.map(p =>
+          p.id === projectId ? { ...p, ...updates } : p
+        )
       })),
 
       deleteProject: (projectId) => set((state) => ({

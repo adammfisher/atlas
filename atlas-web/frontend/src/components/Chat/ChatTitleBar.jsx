@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { ChevronDown, Star, Pencil, FolderPlus, Trash2, PanelRight } from 'lucide-react'
+import { Link, useParams } from 'react-router-dom'
+import { ChevronDown, Star, Pencil, FolderPlus, Trash2, PanelRight, FolderOpen, Settings } from 'lucide-react'
 import { useChatStore } from '../../hooks/useChatStore'
 
 // Capitalize first letter of a string
@@ -15,10 +16,14 @@ function ChatTitleBar({ onRename, onDelete, onAddToProject, artifactsCount = 0, 
   const dropdownRef = useRef(null)
   const inputRef = useRef(null)
 
-  const { sessions, currentSessionId, updateSessionTitle, toggleSessionStar } = useChatStore()
+  const { projectId } = useParams()
+  const { sessions, projects, currentSessionId, updateSessionTitle, toggleSessionStar } = useChatStore()
 
   // Compute current session from sessions and currentSessionId
   const currentSession = sessions.find(s => s.id === currentSessionId) || null
+
+  // Get current project if in a project context
+  const currentProject = projectId ? projects.find(p => p.id === projectId) : null
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -83,7 +88,23 @@ function ChatTitleBar({ onRename, onDelete, onAddToProject, artifactsCount = 0, 
 
   return (
     <div className="h-12 border-b border-[var(--border-color)] flex items-center justify-between px-4">
-      <div className="relative" ref={dropdownRef}>
+      <div className="flex items-center gap-2">
+        {/* Project badge if in a project context */}
+        {currentProject && (
+          <Link
+            to={`/project/${projectId}/settings`}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors group"
+            style={{ backgroundColor: 'rgba(205, 71, 126, 0.1)', color: '#CD477E' }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(205, 71, 126, 0.2)'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(205, 71, 126, 0.1)'}
+          >
+            <FolderOpen size={14} />
+            <span className="text-[12px] font-medium max-w-[120px] truncate">{currentProject.name}</span>
+            <Settings size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+          </Link>
+        )}
+
+        <div className="relative" ref={dropdownRef}>
         {isRenaming ? (
           <input
             ref={inputRef}
@@ -162,6 +183,7 @@ function ChatTitleBar({ onRename, onDelete, onAddToProject, artifactsCount = 0, 
             </button>
           </div>
         )}
+        </div>
       </div>
 
       {/* Artifacts button - on the right side of title bar */}
@@ -190,3 +212,4 @@ function ChatTitleBar({ onRename, onDelete, onAddToProject, artifactsCount = 0, 
 }
 
 export default ChatTitleBar
+

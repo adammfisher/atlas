@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Plus, Clock, ArrowUp, Database } from 'lucide-react'
 import PlusMenu from './PlusMenu'
 import ModelSelector from './ModelSelector'
@@ -16,6 +17,7 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
   const containerRef = useRef(null)
+  const location = useLocation()
 
   const {
     pendingFiles,
@@ -28,7 +30,8 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
     setExtendedThinkingEnabled,
     knowledgeCoreEnabled,
     setKnowledgeCoreEnabled,
-    enabledConnectors
+    enabledConnectors,
+    currentSessionId
   } = useChatStore()
 
   // Auto-resize textarea
@@ -40,10 +43,21 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
     }
   }, [input])
 
-  // Focus textarea on mount
+  // Focus textarea on mount and when session changes
   useEffect(() => {
     textareaRef.current?.focus()
   }, [])
+
+  // Clear input and refocus when session changes or navigation occurs (e.g., New chat clicked)
+  // Using location.key ensures this triggers even when navigating to the same path
+  useEffect(() => {
+    setInput('')
+    clearPendingFiles()
+    // Small delay to ensure DOM is ready after navigation
+    setTimeout(() => {
+      textareaRef.current?.focus()
+    }, 50)
+  }, [currentSessionId, location.key, clearPendingFiles])
 
   // Handle paste for images
   const handlePaste = (e) => {
@@ -229,10 +243,17 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
 
           {/* Right side - Model selector and Send */}
           <div className="flex items-center gap-1">
-            <ModelSelector
+            {/* Model selector hidden - currently only Haiku is enabled */}
+            {/* <ModelSelector
               isOpen={showModelSelector}
               onToggle={() => setShowModelSelector(!showModelSelector)}
-            />
+            /> */}
+            <span
+              className="text-[12px] px-2 py-1 rounded"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Haiku 4.5
+            </span>
             <button
               onClick={handleSend}
               disabled={!canSend}

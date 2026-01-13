@@ -46,8 +46,13 @@ resource "aws_iam_role_policy" "dynamodb_access" {
           aws_dynamodb_table.sessions.arn,
           "${aws_dynamodb_table.sessions.arn}/index/*",
           aws_dynamodb_table.messages.arn,
+          "${aws_dynamodb_table.messages.arn}/index/*",
           aws_dynamodb_table.projects.arn,
+          "${aws_dynamodb_table.projects.arn}/index/*",
           aws_dynamodb_table.project_files.arn,
+          "${aws_dynamodb_table.project_files.arn}/index/*",
+          aws_dynamodb_table.project_memory.arn,
+          "${aws_dynamodb_table.project_memory.arn}/index/*",
           aws_dynamodb_table.mcp_configs.arn,
           aws_dynamodb_table.artifacts.arn,
           aws_dynamodb_table.summaries.arn

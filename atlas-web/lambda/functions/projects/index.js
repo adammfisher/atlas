@@ -1,5 +1,5 @@
 const { getItem, putItem, updateItem, deleteItem, queryItems, batchDeleteItems } = require('./shared/dynamodb');
-const { getUploadUrl, deleteObject, uploadContent } = require('./shared/s3');
+const { getUploadUrl, deleteObject, uploadContent, getContent } = require('./shared/s3');
 const {
   success,
   created,
@@ -12,37 +12,97 @@ const {
   getPathParam
 } = require('./shared/response');
 const { extractZip, isZipFile, isSupportedType } = require('./shared/zip');
+const { BedrockRuntimeClient, ConverseCommand } = require('@aws-sdk/client-bedrock-runtime');
+
+// Bedrock client for memory generation
+const bedrockClient = new BedrockRuntimeClient({ region: 'us-east-1' });
+// Using Haiku for memory generation (cost-effective)
+const MEMORY_MODEL = 'global.anthropic.claude-haiku-4-5-20251001-v1:0';
 
 const PROJECTS_TABLE = process.env.PROJECTS_TABLE;
 const PROJECT_FILES_TABLE = process.env.PROJECT_FILES_TABLE;
+const PROJECT_MEMORY_TABLE = process.env.PROJECT_MEMORY_TABLE;
+const SESSIONS_TABLE = process.env.SESSIONS_TABLE;
+const MESSAGES_TABLE = process.env.MESSAGES_TABLE;
 const UPLOADS_BUCKET = process.env.UPLOADS_BUCKET;
+
+// Token estimation constants
+const CHARS_PER_TOKEN = 4;
+const TOKEN_BUFFER = 1.1; // 10% safety buffer
+
+/**
+ * Estimate tokens for text content
+ */
+function estimateTokens(text) {
+  if (!text) return 0;
+  return Math.ceil((text.length / CHARS_PER_TOKEN) * TOKEN_BUFFER);
+}
+
+/**
+ * Estimate tokens for image based on dimensions
+ * Claude charges ~765-8000 tokens per image depending on size
+ */
+function estimateImageTokens(size) {
+  // Rough estimate based on file size (larger files = larger images = more tokens)
+  if (size < 50000) return 765;      // Small images
+  if (size < 200000) return 1500;    // Medium images
+  if (size < 500000) return 4000;    // Large images
+  return 8000;                        // Very large images
+}
 
 /**
  * Main handler
  */
 exports.handler = async (event) => {
   console.log('Projects event:', JSON.stringify(event));
-  
+
   const method = event.requestContext?.http?.method || event.httpMethod;
   const path = event.requestContext?.http?.path || event.path;
   const projectId = getPathParam(event, 'projectId');
   const fileId = getPathParam(event, 'fileId');
-  
+
   try {
     // Route based on method and path
-    if (path.includes('/files/upload-zip')) {
+    // Memory routes
+    if (path.includes('/memory')) {
+      if (method === 'GET') {
+        return getProjectMemory(event, projectId);
+      } else if (method === 'PUT') {
+        return updateProjectMemory(event, projectId);
+      } else if (method === 'POST' && path.includes('/regenerate')) {
+        return regenerateProjectMemory(event, projectId);
+      }
+    }
+    // Chats/sessions routes
+    else if (path.includes('/chats') || path.includes('/sessions')) {
+      if (method === 'GET') {
+        return listProjectChats(event, projectId);
+      }
+    }
+    // File routes
+    else if (path.includes('/files/upload-zip')) {
       if (method === 'POST') {
         return uploadZipFile(event, projectId);
       }
+    } else if (path.includes('/files') && fileId && path.includes('/pin')) {
+      if (method === 'PUT' || method === 'POST') {
+        return toggleFilePin(event, projectId, fileId);
+      }
     } else if (path.includes('/files')) {
-      if (method === 'GET') {
+      if (method === 'GET' && !fileId) {
         return listProjectFiles(event, projectId);
+      } else if (method === 'GET' && fileId) {
+        return getProjectFile(event, projectId, fileId);
       } else if (method === 'POST') {
         return uploadProjectFile(event, projectId);
+      } else if (method === 'PUT' && fileId) {
+        return updateProjectFile(event, projectId, fileId);
       } else if (method === 'DELETE' && fileId) {
         return deleteProjectFile(event, projectId, fileId);
       }
-    } else if (method === 'GET' && projectId) {
+    }
+    // Project routes
+    else if (method === 'GET' && projectId) {
       return getProject(event, projectId);
     } else if (method === 'GET') {
       return listProjects(event);
@@ -53,7 +113,7 @@ exports.handler = async (event) => {
     } else if (method === 'DELETE' && projectId) {
       return deleteProject(event, projectId);
     }
-    
+
     return badRequest('Invalid route');
   } catch (error) {
     console.error('Projects error:', error);
@@ -61,23 +121,43 @@ exports.handler = async (event) => {
   }
 };
 
+// =============================================================================
+// PROJECT CRUD
+// =============================================================================
+
 /**
- * List all projects for user
+ * List all projects for user with enhanced metadata
  */
 async function listProjects(event) {
   const userId = getUserId(event);
-  
-  const projects = await queryItems(PROJECTS_TABLE, {
+  const qs = event.queryStringParameters || {};
+  const status = qs.status || 'active'; // active, archived, all
+
+  let projects = await queryItems(PROJECTS_TABLE, {
     expression: 'userId = :userId',
     values: { ':userId': userId }
+  }, {
+    indexName: 'userId-lastActivityAt-index',
+    ascending: false
   });
-  
+
+  // Filter by status if not 'all'
+  if (status !== 'all') {
+    projects = projects.filter(p => (p.status || 'active') === status);
+  }
+
   return success({
     projects: projects.map(p => ({
       id: p.projectId,
       name: p.name,
       description: p.description,
-      instructions: p.instructions,
+      status: p.status || 'active',
+      model: p.model || 'sonnet',
+      pinnedTokens: p.pinnedTokens || 0,
+      chatCount: p.chatCount || 0,
+      fileCount: p.fileCount || 0,
+      memoryPreview: p.memoryPreview || null,
+      lastActivityAt: p.lastActivityAt || p.updatedAt,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt
     }))
@@ -85,135 +165,209 @@ async function listProjects(event) {
 }
 
 /**
- * Get a single project
+ * Get a single project with full details
  */
 async function getProject(event, projectId) {
   const userId = getUserId(event);
-  
+
   const project = await getItem(PROJECTS_TABLE, { userId, projectId });
-  
+
   if (!project) {
     return notFound('Project not found');
   }
-  
-  // Get file count
+
+  // Get files with details
   const files = await queryItems(PROJECT_FILES_TABLE, {
     expression: 'projectId = :projectId',
     values: { ':projectId': projectId }
   });
-  
+
+  // Calculate totals
+  const pinnedFiles = files.filter(f => f.pinned === 'true');
+  const totalPinnedTokens = pinnedFiles.reduce((sum, f) => sum + (f.tokenCount || 0), 0);
+
+  // Get current memory
+  let memory = null;
+  if (PROJECT_MEMORY_TABLE) {
+    try {
+      const memories = await queryItems(PROJECT_MEMORY_TABLE, {
+        expression: 'projectId = :projectId',
+        values: { ':projectId': projectId }
+      }, { ascending: false, limit: 1 });
+      if (memories.length > 0 && memories[0].current) {
+        memory = memories[0];
+      }
+    } catch (e) {
+      console.error('Failed to load memory:', e);
+    }
+  }
+
+  // Get chat count
+  let chatCount = project.chatCount || 0;
+  if (SESSIONS_TABLE) {
+    try {
+      const chats = await queryItems(SESSIONS_TABLE, {
+        expression: 'projectId = :projectId',
+        values: { ':projectId': projectId }
+      }, { indexName: 'projectId-updatedAt-index' });
+      chatCount = chats.length;
+    } catch (e) {
+      // Use cached count if query fails
+    }
+  }
+
   return success({
     id: project.projectId,
     name: project.name,
     description: project.description,
     instructions: project.instructions,
+    status: project.status || 'active',
+    model: project.model || 'sonnet',
+    pinnedTokens: totalPinnedTokens,
+    chatCount,
     fileCount: files.length,
+    files: files.map(f => ({
+      id: f.fileId,
+      name: f.name,
+      type: f.type,
+      size: f.size,
+      pinned: f.pinned === 'true',
+      tokenCount: f.tokenCount || 0,
+      processingStatus: f.processingStatus || 'complete',
+      summary: f.summary || null,
+      description: f.description || null,
+      createdAt: f.createdAt
+    })),
+    memory: memory ? {
+      sections: memory.sections,
+      generatedAt: memory.generatedAt,
+      tokenCount: memory.tokenCount
+    } : null,
+    lastActivityAt: project.lastActivityAt || project.updatedAt,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt
   });
 }
 
 /**
- * Create a new project
+ * Create a new project with enhanced fields
  */
 async function createProject(event) {
   const userId = getUserId(event);
   const body = parseBody(event);
-  
+
   if (!body.name) {
     return badRequest('Project name is required');
   }
-  
+
   const projectId = `proj_${Date.now()}`;
   const now = Date.now();
-  
+
   const project = {
     userId,
     projectId,
     name: body.name,
     description: body.description || '',
     instructions: body.instructions || '',
+    status: 'active',
+    model: body.model || 'sonnet',
+    pinnedTokens: 0,
+    chatCount: 0,
+    fileCount: 0,
+    lastActivityAt: now,
     createdAt: now,
     updatedAt: now
   };
-  
+
   await putItem(PROJECTS_TABLE, project);
-  
+
   return created({
     id: project.projectId,
     name: project.name,
     description: project.description,
     instructions: project.instructions,
+    status: project.status,
+    model: project.model,
+    pinnedTokens: project.pinnedTokens,
+    chatCount: project.chatCount,
+    fileCount: project.fileCount,
+    lastActivityAt: project.lastActivityAt,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt
   });
 }
 
 /**
- * Update a project
+ * Update a project with enhanced fields
  */
 async function updateProject(event, projectId) {
   const userId = getUserId(event);
   const body = parseBody(event);
-  
+
   // Verify project exists
   const project = await getItem(PROJECTS_TABLE, { userId, projectId });
   if (!project) {
     return notFound('Project not found');
   }
-  
+
   // Build updates
-  const updates = { updatedAt: Date.now() };
-  
-  if (body.name !== undefined) {
-    updates.name = body.name;
-  }
-  if (body.description !== undefined) {
-    updates.description = body.description;
-  }
-  if (body.instructions !== undefined) {
-    updates.instructions = body.instructions;
-  }
-  
+  const now = Date.now();
+  const updates = { updatedAt: now, lastActivityAt: now };
+
+  if (body.name !== undefined) updates.name = body.name;
+  if (body.description !== undefined) updates.description = body.description;
+  if (body.instructions !== undefined) updates.instructions = body.instructions;
+  if (body.status !== undefined) updates.status = body.status;
+  if (body.model !== undefined) updates.model = body.model;
+
   const updated = await updateItem(PROJECTS_TABLE, { userId, projectId }, updates);
-  
+
   return success({
     id: updated.projectId,
     name: updated.name,
     description: updated.description,
     instructions: updated.instructions,
+    status: updated.status || 'active',
+    model: updated.model || 'sonnet',
+    pinnedTokens: updated.pinnedTokens || 0,
+    chatCount: updated.chatCount || 0,
+    fileCount: updated.fileCount || 0,
+    lastActivityAt: updated.lastActivityAt,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt
   });
 }
 
 /**
- * Delete a project and its files
+ * Delete a project and all associated data
  */
 async function deleteProject(event, projectId) {
   const userId = getUserId(event);
-  
+
   // Verify project exists
   const project = await getItem(PROJECTS_TABLE, { userId, projectId });
   if (!project) {
     return notFound('Project not found');
   }
-  
+
   // Get all files for this project
   const files = await queryItems(PROJECT_FILES_TABLE, {
     expression: 'projectId = :projectId',
     values: { ':projectId': projectId }
   });
-  
+
   // Delete all files from S3 and DynamoDB
   for (const file of files) {
     try {
       await deleteObject(UPLOADS_BUCKET, file.s3Key);
+      if (file.thumbnailKey) {
+        await deleteObject(UPLOADS_BUCKET, file.thumbnailKey);
+      }
     } catch (e) {
       console.error(`Failed to delete S3 object ${file.s3Key}:`, e);
     }
   }
-  
+
   if (files.length > 0) {
     const fileKeys = files.map(f => ({
       projectId: f.projectId,
@@ -221,66 +375,188 @@ async function deleteProject(event, projectId) {
     }));
     await batchDeleteItems(PROJECT_FILES_TABLE, fileKeys);
   }
-  
+
+  // Delete memory records
+  if (PROJECT_MEMORY_TABLE) {
+    try {
+      const memories = await queryItems(PROJECT_MEMORY_TABLE, {
+        expression: 'projectId = :projectId',
+        values: { ':projectId': projectId }
+      });
+      if (memories.length > 0) {
+        const memoryKeys = memories.map(m => ({
+          projectId: m.projectId,
+          version: m.version
+        }));
+        await batchDeleteItems(PROJECT_MEMORY_TABLE, memoryKeys);
+      }
+    } catch (e) {
+      console.error('Failed to delete memory records:', e);
+    }
+  }
+
+  // Unlink sessions (don't delete them, just remove project association)
+  if (SESSIONS_TABLE) {
+    try {
+      const sessions = await queryItems(SESSIONS_TABLE, {
+        expression: 'projectId = :projectId',
+        values: { ':projectId': projectId }
+      }, { indexName: 'projectId-updatedAt-index' });
+
+      for (const session of sessions) {
+        await updateItem(SESSIONS_TABLE,
+          { userId: session.userId, sessionId: session.sessionId },
+          { projectId: null }
+        );
+      }
+    } catch (e) {
+      console.error('Failed to unlink sessions:', e);
+    }
+  }
+
   // Delete project
   await deleteItem(PROJECTS_TABLE, { userId, projectId });
-  
+
   return noContent();
 }
 
+// =============================================================================
+// FILE MANAGEMENT
+// =============================================================================
+
 /**
- * List files in a project
+ * List files in a project with enhanced metadata
  */
 async function listProjectFiles(event, projectId) {
   const userId = getUserId(event);
-  
+  const qs = event.queryStringParameters || {};
+  const pinnedOnly = qs.pinned === 'true';
+
   // Verify project belongs to user
   const project = await getItem(PROJECTS_TABLE, { userId, projectId });
   if (!project) {
     return notFound('Project not found');
   }
-  
-  const files = await queryItems(PROJECT_FILES_TABLE, {
-    expression: 'projectId = :projectId',
-    values: { ':projectId': projectId }
-  });
-  
+
+  let files;
+  if (pinnedOnly) {
+    // Use GSI for pinned files
+    files = await queryItems(PROJECT_FILES_TABLE, {
+      expression: 'projectId = :projectId AND pinned = :pinned',
+      values: { ':projectId': projectId, ':pinned': 'true' }
+    }, { indexName: 'projectId-pinned-index' });
+  } else {
+    files = await queryItems(PROJECT_FILES_TABLE, {
+      expression: 'projectId = :projectId',
+      values: { ':projectId': projectId }
+    });
+  }
+
+  // Calculate totals
+  const pinnedFiles = files.filter(f => f.pinned === 'true');
+  const totalPinnedTokens = pinnedFiles.reduce((sum, f) => sum + (f.tokenCount || 0), 0);
+
   return success({
     projectId,
+    totalFiles: files.length,
+    pinnedCount: pinnedFiles.length,
+    totalPinnedTokens,
     files: files.map(f => ({
       id: f.fileId,
       name: f.name,
       type: f.type,
       size: f.size,
+      pinned: f.pinned === 'true',
+      tokenCount: f.tokenCount || 0,
+      processingStatus: f.processingStatus || 'complete',
+      summary: f.summary || null,
+      description: f.description || null,
       createdAt: f.createdAt
     }))
   });
 }
 
 /**
- * Upload a file to a project (returns presigned URL)
+ * Get a single file with content (for viewing/editing)
  */
-async function uploadProjectFile(event, projectId) {
+async function getProjectFile(event, projectId, fileId) {
   const userId = getUserId(event);
-  const body = parseBody(event);
-  
+  const qs = event.queryStringParameters || {};
+  const includeContent = qs.content === 'true';
+
   // Verify project belongs to user
   const project = await getItem(PROJECTS_TABLE, { userId, projectId });
   if (!project) {
     return notFound('Project not found');
   }
-  
+
+  const file = await getItem(PROJECT_FILES_TABLE, { projectId, fileId });
+  if (!file) {
+    return notFound('File not found');
+  }
+
+  const response = {
+    id: file.fileId,
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    pinned: file.pinned === 'true',
+    tokenCount: file.tokenCount || 0,
+    processingStatus: file.processingStatus || 'complete',
+    summary: file.summary || null,
+    description: file.description || null,
+    createdAt: file.createdAt
+  };
+
+  // Include content if requested and file is text-based
+  if (includeContent && isTextFile(file.type)) {
+    try {
+      const contentResult = await getContent(UPLOADS_BUCKET, file.s3Key);
+      response.content = contentResult.content;
+    } catch (e) {
+      console.error('Failed to load file content:', e);
+    }
+  }
+
+  return success(response);
+}
+
+/**
+ * Upload a file to a project with enhanced metadata
+ */
+async function uploadProjectFile(event, projectId) {
+  const userId = getUserId(event);
+  const body = parseBody(event);
+
+  // Verify project belongs to user
+  const project = await getItem(PROJECTS_TABLE, { userId, projectId });
+  if (!project) {
+    return notFound('Project not found');
+  }
+
   if (!body.filename || !body.contentType) {
     return badRequest('filename and contentType are required');
   }
-  
+
   const fileId = `file_${Date.now()}`;
   const s3Key = `projects/${projectId}/${fileId}-${body.filename}`;
-  
+  const now = Date.now();
+
+  // Estimate tokens based on file type and size
+  let tokenCount = 0;
+  if (isTextFile(body.contentType)) {
+    tokenCount = estimateTokens(body.size ? body.size.toString() : '0');
+  } else if (body.contentType.startsWith('image/')) {
+    tokenCount = estimateImageTokens(body.size || 0);
+  } else if (body.contentType === 'application/pdf') {
+    // PDF tokens estimated during processing
+    tokenCount = 0;
+  }
+
   // Generate presigned upload URL
   const uploadUrl = await getUploadUrl(UPLOADS_BUCKET, s3Key, body.contentType);
-  
-  // Save file metadata
+
+  // Save file metadata with enhanced fields
   const file = {
     projectId,
     fileId,
@@ -288,14 +564,29 @@ async function uploadProjectFile(event, projectId) {
     type: body.contentType,
     size: body.size || 0,
     s3Key,
-    createdAt: Date.now()
+    pinned: body.pinned === true ? 'true' : 'false',
+    tokenCount,
+    processingStatus: needsProcessing(body.contentType) ? 'pending' : 'complete',
+    summary: null,
+    description: body.description || null,
+    createdAt: now
   };
-  
+
   await putItem(PROJECT_FILES_TABLE, file);
-  
-  // Update project timestamp
-  await updateItem(PROJECTS_TABLE, { userId, projectId }, { updatedAt: Date.now() });
-  
+
+  // Update project metadata
+  const fileCount = (project.fileCount || 0) + 1;
+  const pinnedTokens = file.pinned === 'true'
+    ? (project.pinnedTokens || 0) + tokenCount
+    : (project.pinnedTokens || 0);
+
+  await updateItem(PROJECTS_TABLE, { userId, projectId }, {
+    updatedAt: now,
+    lastActivityAt: now,
+    fileCount,
+    pinnedTokens
+  });
+
   return success({
     fileId,
     uploadUrl,
@@ -303,8 +594,109 @@ async function uploadProjectFile(event, projectId) {
       id: file.fileId,
       name: file.name,
       type: file.type,
+      size: file.size,
+      pinned: file.pinned === 'true',
+      tokenCount: file.tokenCount,
+      processingStatus: file.processingStatus,
       createdAt: file.createdAt
     }
+  });
+}
+
+/**
+ * Update file metadata (rename, description)
+ */
+async function updateProjectFile(event, projectId, fileId) {
+  const userId = getUserId(event);
+  const body = parseBody(event);
+
+  // Verify project belongs to user
+  const project = await getItem(PROJECTS_TABLE, { userId, projectId });
+  if (!project) {
+    return notFound('Project not found');
+  }
+
+  const file = await getItem(PROJECT_FILES_TABLE, { projectId, fileId });
+  if (!file) {
+    return notFound('File not found');
+  }
+
+  const updates = {};
+  if (body.name !== undefined) updates.name = body.name;
+  if (body.description !== undefined) updates.description = body.description;
+
+  if (Object.keys(updates).length === 0) {
+    return badRequest('No updates provided');
+  }
+
+  const updated = await updateItem(PROJECT_FILES_TABLE, { projectId, fileId }, updates);
+
+  // Update project timestamp
+  await updateItem(PROJECTS_TABLE, { userId, projectId }, {
+    updatedAt: Date.now(),
+    lastActivityAt: Date.now()
+  });
+
+  return success({
+    id: updated.fileId,
+    name: updated.name,
+    type: updated.type,
+    size: updated.size,
+    pinned: updated.pinned === 'true',
+    tokenCount: updated.tokenCount || 0,
+    processingStatus: updated.processingStatus || 'complete',
+    summary: updated.summary || null,
+    description: updated.description || null,
+    createdAt: updated.createdAt
+  });
+}
+
+/**
+ * Toggle file pin status
+ */
+async function toggleFilePin(event, projectId, fileId) {
+  const userId = getUserId(event);
+  const body = parseBody(event);
+
+  // Verify project belongs to user
+  const project = await getItem(PROJECTS_TABLE, { userId, projectId });
+  if (!project) {
+    return notFound('Project not found');
+  }
+
+  const file = await getItem(PROJECT_FILES_TABLE, { projectId, fileId });
+  if (!file) {
+    return notFound('File not found');
+  }
+
+  // Determine new pin state
+  const currentlyPinned = file.pinned === 'true';
+  const newPinned = body.pinned !== undefined ? body.pinned : !currentlyPinned;
+
+  // Update file
+  await updateItem(PROJECT_FILES_TABLE, { projectId, fileId }, {
+    pinned: newPinned ? 'true' : 'false'
+  });
+
+  // Update project's pinned token count
+  const tokenDelta = file.tokenCount || 0;
+  const currentPinnedTokens = project.pinnedTokens || 0;
+  const newPinnedTokens = newPinned
+    ? currentPinnedTokens + tokenDelta
+    : Math.max(0, currentPinnedTokens - tokenDelta);
+
+  await updateItem(PROJECTS_TABLE, { userId, projectId }, {
+    pinnedTokens: newPinnedTokens,
+    updatedAt: Date.now(),
+    lastActivityAt: Date.now()
+  });
+
+  return success({
+    id: file.fileId,
+    name: file.name,
+    pinned: newPinned,
+    tokenCount: file.tokenCount || 0,
+    projectPinnedTokens: newPinnedTokens
   });
 }
 
@@ -329,6 +721,9 @@ async function deleteProjectFile(event, projectId, fileId) {
   // Delete from S3
   try {
     await deleteObject(UPLOADS_BUCKET, file.s3Key);
+    if (file.thumbnailKey) {
+      await deleteObject(UPLOADS_BUCKET, file.thumbnailKey);
+    }
   } catch (e) {
     console.error(`Failed to delete S3 object ${file.s3Key}:`, e);
   }
@@ -336,16 +731,24 @@ async function deleteProjectFile(event, projectId, fileId) {
   // Delete from DynamoDB
   await deleteItem(PROJECT_FILES_TABLE, { projectId, fileId });
 
-  // Update project timestamp
-  await updateItem(PROJECTS_TABLE, { userId, projectId }, { updatedAt: Date.now() });
+  // Update project metadata
+  const fileCount = Math.max(0, (project.fileCount || 1) - 1);
+  const pinnedTokens = file.pinned === 'true'
+    ? Math.max(0, (project.pinnedTokens || 0) - (file.tokenCount || 0))
+    : (project.pinnedTokens || 0);
+
+  await updateItem(PROJECTS_TABLE, { userId, projectId }, {
+    updatedAt: Date.now(),
+    lastActivityAt: Date.now(),
+    fileCount,
+    pinnedTokens
+  });
 
   return noContent();
 }
 
 /**
  * Upload and extract a zip file to a project
- * This endpoint accepts the zip file content as base64 in the request body
- * and extracts all supported files into the project
  */
 async function uploadZipFile(event, projectId) {
   const userId = getUserId(event);
@@ -362,6 +765,7 @@ async function uploadZipFile(event, projectId) {
   }
 
   const zipFilename = body.filename || 'upload.zip';
+  const pinAllFiles = body.pinAll === true;
 
   try {
     // Extract the zip file
@@ -378,6 +782,7 @@ async function uploadZipFile(event, projectId) {
 
     const uploadedFiles = [];
     const now = Date.now();
+    let addedTokens = 0;
 
     // Upload each extracted file to S3 and save metadata
     for (const file of result.files) {
@@ -388,6 +793,14 @@ async function uploadZipFile(event, projectId) {
       const content = Buffer.from(file.base64, 'base64');
       await uploadContent(UPLOADS_BUCKET, s3Key, content, file.type);
 
+      // Estimate tokens
+      let tokenCount = 0;
+      if (isTextFile(file.type)) {
+        tokenCount = estimateTokens(file.size.toString());
+      } else if (file.type.startsWith('image/')) {
+        tokenCount = estimateImageTokens(file.size);
+      }
+
       // Save file metadata
       const fileRecord = {
         projectId,
@@ -397,11 +810,18 @@ async function uploadZipFile(event, projectId) {
         type: file.type,
         size: file.size,
         s3Key,
+        pinned: pinAllFiles ? 'true' : 'false',
+        tokenCount,
+        processingStatus: needsProcessing(file.type) ? 'pending' : 'complete',
         fromZip: zipFilename,
         createdAt: now
       };
 
       await putItem(PROJECT_FILES_TABLE, fileRecord);
+
+      if (pinAllFiles) {
+        addedTokens += tokenCount;
+      }
 
       uploadedFiles.push({
         id: fileId,
@@ -409,12 +829,22 @@ async function uploadZipFile(event, projectId) {
         path: file.path,
         type: file.type,
         size: file.size,
+        pinned: pinAllFiles,
+        tokenCount,
         createdAt: now
       });
     }
 
-    // Update project timestamp
-    await updateItem(PROJECTS_TABLE, { userId, projectId }, { updatedAt: now });
+    // Update project metadata
+    const fileCount = (project.fileCount || 0) + uploadedFiles.length;
+    const pinnedTokens = (project.pinnedTokens || 0) + addedTokens;
+
+    await updateItem(PROJECTS_TABLE, { userId, projectId }, {
+      updatedAt: now,
+      lastActivityAt: now,
+      fileCount,
+      pinnedTokens
+    });
 
     return success({
       zipFilename,
@@ -422,11 +852,446 @@ async function uploadZipFile(event, projectId) {
       skippedCount: result.skippedCount,
       summary: result.summary,
       files: uploadedFiles,
-      skipped: result.skipped
+      skipped: result.skipped,
+      projectFileCount: fileCount,
+      projectPinnedTokens: pinnedTokens
     });
 
   } catch (error) {
     console.error('Zip extraction error:', error);
     return serverError(`Failed to process zip file: ${error.message}`);
   }
+}
+
+// =============================================================================
+// PROJECT MEMORY
+// =============================================================================
+
+/**
+ * Get current project memory
+ */
+async function getProjectMemory(event, projectId) {
+  const userId = getUserId(event);
+
+  // Verify project belongs to user
+  const project = await getItem(PROJECTS_TABLE, { userId, projectId });
+  if (!project) {
+    return notFound('Project not found');
+  }
+
+  if (!PROJECT_MEMORY_TABLE) {
+    return success({ memory: null, message: 'Memory feature not configured' });
+  }
+
+  // Get latest memory
+  const memories = await queryItems(PROJECT_MEMORY_TABLE, {
+    expression: 'projectId = :projectId',
+    values: { ':projectId': projectId }
+  }, { ascending: false, limit: 1 });
+
+  if (memories.length === 0) {
+    return success({ memory: null });
+  }
+
+  const memory = memories[0];
+  return success({
+    memory: {
+      sections: memory.sections,
+      processedChatIds: memory.processedChatIds || [],
+      generatedAt: memory.generatedAt,
+      tokenCount: memory.tokenCount || 0,
+      version: memory.version
+    }
+  });
+}
+
+/**
+ * Update project memory (manual edit)
+ */
+async function updateProjectMemory(event, projectId) {
+  const userId = getUserId(event);
+  const body = parseBody(event);
+
+  // Verify project belongs to user
+  const project = await getItem(PROJECTS_TABLE, { userId, projectId });
+  if (!project) {
+    return notFound('Project not found');
+  }
+
+  if (!PROJECT_MEMORY_TABLE) {
+    return badRequest('Memory feature not configured');
+  }
+
+  if (!body.sections) {
+    return badRequest('sections object is required');
+  }
+
+  const now = Date.now();
+
+  // Mark previous version as not current
+  const memories = await queryItems(PROJECT_MEMORY_TABLE, {
+    expression: 'projectId = :projectId',
+    values: { ':projectId': projectId }
+  }, { ascending: false, limit: 1 });
+
+  if (memories.length > 0) {
+    await updateItem(PROJECT_MEMORY_TABLE,
+      { projectId, version: memories[0].version },
+      { current: false }
+    );
+  }
+
+  // Calculate token count for new memory
+  const memoryText = Object.values(body.sections).join('\n');
+  const tokenCount = estimateTokens(memoryText);
+
+  // Create new memory version
+  const newMemory = {
+    projectId,
+    version: now,
+    current: true,
+    sections: body.sections,
+    processedChatIds: body.processedChatIds || memories[0]?.processedChatIds || [],
+    generatedAt: now,
+    tokenCount,
+    editedManually: true
+  };
+
+  await putItem(PROJECT_MEMORY_TABLE, newMemory);
+
+  // Update project with memory preview
+  const preview = body.sections.purposeContext
+    ? body.sections.purposeContext.substring(0, 200)
+    : null;
+
+  await updateItem(PROJECTS_TABLE, { userId, projectId }, {
+    memoryPreview: preview,
+    updatedAt: now,
+    lastActivityAt: now
+  });
+
+  return success({
+    memory: {
+      sections: newMemory.sections,
+      processedChatIds: newMemory.processedChatIds,
+      generatedAt: newMemory.generatedAt,
+      tokenCount: newMemory.tokenCount,
+      version: newMemory.version
+    }
+  });
+}
+
+/**
+ * Generate synthesized memory from project conversations using Claude
+ */
+async function regenerateProjectMemory(event, projectId) {
+  const userId = getUserId(event);
+
+  // Verify project belongs to user
+  const project = await getItem(PROJECTS_TABLE, { userId, projectId });
+  if (!project) {
+    return notFound('Project not found');
+  }
+
+  try {
+    // Get all sessions for this project
+    const sessions = await queryItems(SESSIONS_TABLE, {
+      expression: 'projectId = :projectId',
+      values: { ':projectId': projectId }
+    }, {
+      indexName: 'projectId-updatedAt-index',
+      ascending: false
+    });
+
+    if (sessions.length === 0) {
+      return success({
+        message: 'No conversations found for this project',
+        projectId,
+        memory: null
+      });
+    }
+
+    // Get messages from each session (limited to avoid context overflow)
+    const allMessages = [];
+    const processedChatIds = [];
+    let totalTokens = 0;
+    const MAX_CONTEXT_TOKENS = 50000; // Leave room for prompt and response
+
+    for (const session of sessions) {
+      if (totalTokens >= MAX_CONTEXT_TOKENS) break;
+
+      const messages = await queryItems(MESSAGES_TABLE, {
+        expression: 'sessionId = :sessionId',
+        values: { ':sessionId': session.sessionId }
+      });
+
+      // Sort by timestamp
+      messages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+      for (const msg of messages) {
+        const msgTokens = estimateTokens(msg.content || '');
+        if (totalTokens + msgTokens > MAX_CONTEXT_TOKENS) break;
+
+        allMessages.push({
+          sessionTitle: session.title,
+          role: msg.role,
+          content: msg.content
+        });
+        totalTokens += msgTokens;
+      }
+
+      processedChatIds.push(session.sessionId);
+    }
+
+    if (allMessages.length === 0) {
+      return success({
+        message: 'No messages found in project conversations',
+        projectId,
+        memory: null
+      });
+    }
+
+    // Format conversations for Claude
+    const conversationText = allMessages
+      .map(m => `[${m.sessionTitle || 'Untitled'}] ${m.role}: ${m.content}`)
+      .join('\n\n---\n\n');
+
+    // Generate memory using Claude
+    const memoryPrompt = `You are analyzing conversations from a project to synthesize persistent memory that will help future AI assistants understand the project context.
+
+Project: ${project.name}
+${project.description ? `Description: ${project.description}` : ''}
+${project.instructions ? `Custom Instructions: ${project.instructions}` : ''}
+
+Below are conversations from this project. Analyze them and generate a synthesized memory document with the following 6 sections. Each section should be concise but comprehensive. If a section has no relevant information, write "No information available yet."
+
+**SECTIONS TO GENERATE:**
+
+1. **Purpose & Context**: What is this project about? What are the main goals and objectives?
+
+2. **Current State**: What has been accomplished? What is the current status of the work?
+
+3. **On The Horizon**: What are the planned next steps? What tasks or features are coming up?
+
+4. **Key Learnings**: What important decisions were made? What insights or discoveries emerged?
+
+5. **Approach & Patterns**: What coding patterns, architectural decisions, or methodologies are being used?
+
+6. **Tools & Resources**: What technologies, libraries, APIs, or external resources are being used?
+
+**CONVERSATIONS:**
+
+${conversationText}
+
+**YOUR RESPONSE:**
+
+Generate the memory document with clear section headers. Be specific and reference actual details from the conversations. Focus on information that would be valuable for context continuity in future conversations.`;
+
+    const command = new ConverseCommand({
+      modelId: MEMORY_MODEL,
+      messages: [{
+        role: 'user',
+        content: [{ text: memoryPrompt }]
+      }],
+      system: [{ text: 'You are a helpful assistant that synthesizes project context from conversations. Be concise but thorough.' }],
+      inferenceConfig: {
+        maxTokens: 4096,
+        temperature: 0.3
+      }
+    });
+
+    const response = await bedrockClient.send(command);
+    const memoryText = response.output.message.content[0].text;
+
+    // Parse the sections from the response
+    const sections = parseMemorySections(memoryText);
+
+    // Get current memory version
+    const existingMemory = await queryItems(PROJECT_MEMORY_TABLE, {
+      expression: 'projectId = :projectId',
+      values: { ':projectId': projectId },
+      scanIndexForward: false,
+      limit: 1
+    });
+
+    const newVersion = existingMemory.length > 0 ? existingMemory[0].version + 1 : 1;
+
+    // Mark old memory as not current
+    if (existingMemory.length > 0 && existingMemory[0].current) {
+      await updateItem(PROJECT_MEMORY_TABLE,
+        { projectId, version: existingMemory[0].version },
+        { current: false }
+      );
+    }
+
+    // Save new memory
+    const newMemory = {
+      projectId,
+      version: newVersion,
+      sections,
+      processedChatIds,
+      current: true,
+      generatedAt: Date.now(),
+      tokenCount: estimateTokens(memoryText)
+    };
+
+    await putItem(PROJECT_MEMORY_TABLE, newMemory);
+
+    // Update project with memory status
+    await updateItem(PROJECTS_TABLE, { userId, projectId }, {
+      memoryVersion: newVersion,
+      memoryGeneratedAt: Date.now(),
+      lastActivityAt: Date.now()
+    });
+
+    console.log(`[Memory] Generated memory v${newVersion} for project ${projectId} from ${processedChatIds.length} conversations`);
+
+    return success({
+      message: 'Memory generated successfully',
+      projectId,
+      version: newVersion,
+      processedChats: processedChatIds.length,
+      sections: Object.keys(sections).filter(k => sections[k] && sections[k] !== 'No information available yet.')
+    });
+
+  } catch (error) {
+    console.error('Memory generation error:', error);
+    return serverError(`Memory generation failed: ${error.message}`);
+  }
+}
+
+/**
+ * Parse memory sections from Claude's response
+ */
+function parseMemorySections(text) {
+  const sections = {
+    purposeContext: '',
+    currentState: '',
+    onTheHorizon: '',
+    keyLearnings: '',
+    approachPatterns: '',
+    toolsResources: ''
+  };
+
+  const sectionMappings = [
+    { key: 'purposeContext', patterns: ['purpose & context', 'purpose and context', '1.', '## 1.'] },
+    { key: 'currentState', patterns: ['current state', '2.', '## 2.'] },
+    { key: 'onTheHorizon', patterns: ['on the horizon', 'horizon', '3.', '## 3.'] },
+    { key: 'keyLearnings', patterns: ['key learnings', 'learnings', '4.', '## 4.'] },
+    { key: 'approachPatterns', patterns: ['approach & patterns', 'approach and patterns', 'patterns', '5.', '## 5.'] },
+    { key: 'toolsResources', patterns: ['tools & resources', 'tools and resources', 'resources', '6.', '## 6.'] }
+  ];
+
+  // Split by common section delimiters
+  const lines = text.split('\n');
+  let currentSection = null;
+  let currentContent = [];
+
+  for (const line of lines) {
+    const lowerLine = line.toLowerCase().trim();
+
+    // Check if this line starts a new section
+    let foundSection = null;
+    for (const mapping of sectionMappings) {
+      if (mapping.patterns.some(p => lowerLine.includes(p.toLowerCase()) || lowerLine.startsWith(p.toLowerCase()))) {
+        foundSection = mapping.key;
+        break;
+      }
+    }
+
+    if (foundSection) {
+      // Save previous section
+      if (currentSection) {
+        sections[currentSection] = currentContent.join('\n').trim();
+      }
+      currentSection = foundSection;
+      currentContent = [];
+      // Don't include the header line in content
+    } else if (currentSection) {
+      currentContent.push(line);
+    }
+  }
+
+  // Save last section
+  if (currentSection) {
+    sections[currentSection] = currentContent.join('\n').trim();
+  }
+
+  // Clean up sections - remove markdown headers and extra whitespace
+  for (const key of Object.keys(sections)) {
+    sections[key] = sections[key]
+      .replace(/^\*\*[^*]+\*\*:?\s*/gm, '')  // Remove bold headers
+      .replace(/^#+\s*/gm, '')               // Remove markdown headers
+      .trim();
+  }
+
+  return sections;
+}
+
+// =============================================================================
+// PROJECT CHATS
+// =============================================================================
+
+/**
+ * List chats in a project
+ */
+async function listProjectChats(event, projectId) {
+  const userId = getUserId(event);
+
+  // Verify project belongs to user
+  const project = await getItem(PROJECTS_TABLE, { userId, projectId });
+  if (!project) {
+    return notFound('Project not found');
+  }
+
+  if (!SESSIONS_TABLE) {
+    return success({ chats: [] });
+  }
+
+  const sessions = await queryItems(SESSIONS_TABLE, {
+    expression: 'projectId = :projectId',
+    values: { ':projectId': projectId }
+  }, {
+    indexName: 'projectId-updatedAt-index',
+    ascending: false
+  });
+
+  return success({
+    projectId,
+    chats: sessions.map(s => ({
+      id: s.sessionId,
+      title: s.title,
+      starred: s.starred || false,
+      memoryProcessed: s.memoryProcessed || false,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt
+    }))
+  });
+}
+
+// =============================================================================
+// HELPERS
+// =============================================================================
+
+/**
+ * Check if file type is text-based
+ */
+function isTextFile(type) {
+  const textTypes = [
+    'text/',
+    'application/json',
+    'application/javascript',
+    'application/typescript',
+    'application/xml',
+    'application/x-yaml',
+    'application/x-python',
+  ];
+  return textTypes.some(t => type.startsWith(t) || type === t);
+}
+
+/**
+ * Check if file needs async processing
+ */
+function needsProcessing(type) {
+  return type.startsWith('image/') || type === 'application/pdf';
 }
