@@ -17,7 +17,7 @@ const { BedrockRuntimeClient, ConverseCommand } = require('@aws-sdk/client-bedro
 // Bedrock client for memory generation
 const bedrockClient = new BedrockRuntimeClient({ region: 'us-east-1' });
 // Using Haiku for memory generation (cost-effective)
-const MEMORY_MODEL = 'global.anthropic.claude-haiku-4-5-20251001-v1:0';
+const MEMORY_MODEL = 'us.anthropic.claude-3-5-haiku-20241022-v1:0';
 
 const PROJECTS_TABLE = process.env.PROJECTS_TABLE;
 const PROJECT_FILES_TABLE = process.env.PROJECT_FILES_TABLE;

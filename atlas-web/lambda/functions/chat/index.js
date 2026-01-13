@@ -140,12 +140,14 @@ async function handleStreamingChatWithStream(event, responseStream) {
     session = {
       userId,
       sessionId: activeSessionId,
-      projectId: projectId || null,
-      title: null,
       starred: false,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
+    // Only include projectId if it has a value (DynamoDB GSI requires string, not null)
+    if (projectId) {
+      session.projectId = projectId;
+    }
     await putItem(SESSIONS_TABLE, session);
   } else {
     console.log('Using existing session:', activeSessionId);
@@ -417,12 +419,14 @@ async function handleStreamingChat(event) {
     session = {
       userId,
       sessionId: activeSessionId,
-      projectId: projectId || null,
-      title: null,
       starred: false,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
+    // Only include projectId if it has a value (DynamoDB GSI requires string, not null)
+    if (projectId) {
+      session.projectId = projectId;
+    }
     await putItem(SESSIONS_TABLE, session);
   }
 

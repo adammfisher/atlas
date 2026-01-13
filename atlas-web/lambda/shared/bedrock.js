@@ -110,13 +110,13 @@ async function executeTool(toolName, toolInput) {
   return JSON.stringify({ error: `Unknown tool: ${toolName}` });
 }
 
-// Claude 4.5 inference profiles
+// Claude 3.5 inference profiles (us. prefix for cross-region inference)
 // NOTE: Currently only Haiku is enabled for cost control
 const MODELS = {
-  haiku: 'global.anthropic.claude-haiku-4-5-20251001-v1:0',
-  // sonnet and opus disabled for now
-  sonnet: 'global.anthropic.claude-haiku-4-5-20251001-v1:0', // Redirects to haiku
-  opus: 'global.anthropic.claude-haiku-4-5-20251001-v1:0'    // Redirects to haiku
+  haiku: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+  // sonnet and opus disabled for now - redirect to haiku
+  sonnet: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+  opus: 'us.anthropic.claude-3-5-haiku-20241022-v1:0'
 };
 
 // Default model for all requests
