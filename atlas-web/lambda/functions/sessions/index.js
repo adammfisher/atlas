@@ -7,10 +7,10 @@ const {
   badRequest,
   notFound,
   serverError,
-  getUserId,
   parseBody,
   getPathParam
 } = require('./shared/response');
+const { authenticateRequest, authErrorResponse } = require('./shared/authMiddleware');
 
 const SESSIONS_TABLE = process.env.SESSIONS_TABLE;
 const MESSAGES_TABLE = process.env.MESSAGES_TABLE;
@@ -22,27 +22,35 @@ const ARTIFACTS_BUCKET = process.env.ARTIFACTS_BUCKET;
  */
 exports.handler = async (event) => {
   console.log('Sessions event:', JSON.stringify(event));
-  
+
+  // Authenticate request
+  let user;
+  try {
+    user = authenticateRequest(event);
+  } catch (error) {
+    return authErrorResponse(error);
+  }
+
   const method = event.requestContext?.http?.method || event.httpMethod;
   const path = event.requestContext?.http?.path || event.path;
   const sessionId = getPathParam(event, 'sessionId');
-  
+
   try {
     // Route based on method and path
     if (method === 'GET' && path.endsWith('/messages')) {
-      return getSessionMessages(event, sessionId);
+      return getSessionMessages(user.userId, sessionId);
     } else if (method === 'GET' && sessionId) {
-      return getSession(event, sessionId);
+      return getSession(user.userId, sessionId);
     } else if (method === 'GET') {
-      return listSessions(event);
+      return listSessions(user.userId);
     } else if (method === 'POST') {
-      return createSession(event);
+      return createSession(user.userId, event);
     } else if (method === 'PUT' && sessionId) {
-      return updateSession(event, sessionId);
+      return updateSession(user.userId, sessionId, event);
     } else if (method === 'DELETE' && sessionId) {
-      return deleteSession(event, sessionId);
+      return deleteSession(user.userId, sessionId);
     }
-    
+
     return badRequest('Invalid route');
   } catch (error) {
     console.error('Sessions error:', error);
@@ -53,9 +61,7 @@ exports.handler = async (event) => {
 /**
  * List all sessions for user
  */
-async function listSessions(event) {
-  const userId = getUserId(event);
-  
+async function listSessions(userId) {
   const sessions = await queryItems(SESSIONS_TABLE, {
     expression: 'userId = :userId',
     values: { ':userId': userId }
@@ -79,9 +85,7 @@ async function listSessions(event) {
 /**
  * Get a single session
  */
-async function getSession(event, sessionId) {
-  const userId = getUserId(event);
-  
+async function getSession(userId, sessionId) {
   const session = await getItem(SESSIONS_TABLE, { userId, sessionId });
   
   if (!session) {
@@ -101,9 +105,7 @@ async function getSession(event, sessionId) {
 /**
  * Get messages for a session
  */
-async function getSessionMessages(event, sessionId) {
-  const userId = getUserId(event);
-  
+async function getSessionMessages(userId, sessionId) {
   // Verify session belongs to user
   const session = await getItem(SESSIONS_TABLE, { userId, sessionId });
   if (!session) {
@@ -131,8 +133,7 @@ async function getSessionMessages(event, sessionId) {
 /**
  * Create a new session
  */
-async function createSession(event) {
-  const userId = getUserId(event);
+async function createSession(userId, event) {
   const body = parseBody(event);
   
   const sessionId = `session_${Date.now()}`;
@@ -163,8 +164,7 @@ async function createSession(event) {
 /**
  * Update a session
  */
-async function updateSession(event, sessionId) {
-  const userId = getUserId(event);
+async function updateSession(userId, sessionId, event) {
   const body = parseBody(event);
   
   // Verify session exists
@@ -201,9 +201,7 @@ async function updateSession(event, sessionId) {
 /**
  * Delete a session and its messages, artifacts (from DynamoDB and S3)
  */
-async function deleteSession(event, sessionId) {
-  const userId = getUserId(event);
-
+async function deleteSession(userId, sessionId) {
   // Verify session exists
   const session = await getItem(SESSIONS_TABLE, { userId, sessionId });
   if (!session) {

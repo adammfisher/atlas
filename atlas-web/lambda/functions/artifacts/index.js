@@ -5,11 +5,11 @@ const {
   badRequest,
   notFound,
   serverError,
-  getUserId,
   getPathParam,
   getQueryParam,
   parseBody
 } = require('./shared/response');
+const { authenticateRequest, authErrorResponse } = require('./shared/authMiddleware');
 
 const ARTIFACTS_TABLE = process.env.ARTIFACTS_TABLE;
 const ARTIFACTS_BUCKET = process.env.ARTIFACTS_BUCKET;
@@ -38,15 +38,22 @@ const ARTIFACT_TYPES = {
 exports.handler = async (event) => {
   console.log('Artifacts event:', JSON.stringify(event));
 
+  // Authenticate request
+  let user;
+  try {
+    user = authenticateRequest(event);
+  } catch (error) {
+    return authErrorResponse(error);
+  }
+
   const method = event.requestContext?.http?.method || event.httpMethod;
   const path = event.requestContext?.http?.path || event.path;
-  const userId = getUserId(event);
 
   try {
     // Route based on path and method
     // POST /api/artifacts - Create artifact
     if (method === 'POST' && path.endsWith('/artifacts')) {
-      return createArtifact(event, userId);
+      return createArtifact(event, user.userId);
     }
 
     // GET /api/sessions/{sessionId}/artifacts - List session artifacts
@@ -69,17 +76,17 @@ exports.handler = async (event) => {
 
     // PATCH /api/artifacts/{artifactId} - Update artifact
     if (method === 'PATCH' && artifactIdMatch) {
-      return updateArtifact(event, userId, artifactIdMatch[1]);
+      return updateArtifact(event, user.userId, artifactIdMatch[1]);
     }
 
     // DELETE /api/artifacts/{artifactId} - Delete artifact
     if (method === 'DELETE' && artifactIdMatch) {
-      return deleteArtifact(event, userId, artifactIdMatch[1]);
+      return deleteArtifact(event, user.userId, artifactIdMatch[1]);
     }
 
     // GET /api/artifacts - List all artifacts (with filters)
     if (method === 'GET' && path.endsWith('/artifacts')) {
-      return listAllArtifacts(event, userId);
+      return listAllArtifacts(event, user.userId);
     }
 
     return badRequest('Invalid route');
@@ -168,7 +175,7 @@ async function listAllArtifacts(event, userId) {
   const sessionId = getQueryParam(event, 'session_id');
   const category = getQueryParam(event, 'type');
   const fileExtension = getQueryParam(event, 'file_extension');
-  const limit = parseInt(getQueryParam(event, 'limit', '50'));
+  const limit = parseInt(getQueryParam(event, 'limit', '100'));
   const visibility = getQueryParam(event, 'visibility');
 
   // If sessionId provided, filter by session
@@ -176,11 +183,55 @@ async function listAllArtifacts(event, userId) {
     return listSessionArtifacts(event, sessionId);
   }
 
-  // For now, require sessionId - in production you'd have a GSI on userId
+  // Query all artifacts for this user using the userId-createdAt GSI
+  const artifacts = await queryItems(ARTIFACTS_TABLE, {
+    expression: 'userId = :userId',
+    values: { ':userId': userId }
+  }, {
+    indexName: 'userId-createdAt-index',
+    ascending: false, // Most recent first
+    limit: limit
+  });
+
+  // Generate download URLs and map response format
+  const artifactsWithUrls = await Promise.all(
+    artifacts.map(async (artifact) => {
+      let downloadUrl = null;
+      try {
+        downloadUrl = await getDownloadUrl(ARTIFACTS_BUCKET, artifact.s3Key, 3600, artifact.name);
+      } catch (e) {
+        console.error(`Failed to generate URL for ${artifact.s3Key}:`, e);
+      }
+
+      return {
+        id: artifact.artifactId,
+        artifactId: artifact.artifactId,
+        sessionId: artifact.sessionId,
+        session_id: artifact.sessionId,
+        projectId: artifact.projectId || null,
+        title: artifact.title,
+        name: artifact.name,
+        type: artifact.type,
+        file_extension: artifact.fileExtension,
+        content_type: artifact.contentType,
+        renderable: artifact.renderable,
+        description: artifact.description,
+        tags: artifact.tags || [],
+        version: artifact.version || 1,
+        size: artifact.size,
+        download_url: downloadUrl,
+        render_url: `/api/artifacts/${artifact.artifactId}/content?sessionId=${artifact.sessionId}`,
+        createdAt: artifact.createdAt,
+        updatedAt: artifact.updatedAt,
+        created_at: artifact.createdAt ? new Date(artifact.createdAt).toISOString() : null,
+        updated_at: artifact.updatedAt ? new Date(artifact.updatedAt).toISOString() : null
+      };
+    })
+  );
+
   return success({
-    artifacts: [],
-    total: 0,
-    message: 'Use session_id query parameter to filter artifacts'
+    artifacts: artifactsWithUrls,
+    total: artifactsWithUrls.length
   });
 }
 

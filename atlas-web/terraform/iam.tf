@@ -55,7 +55,10 @@ resource "aws_iam_role_policy" "dynamodb_access" {
           "${aws_dynamodb_table.project_memory.arn}/index/*",
           aws_dynamodb_table.mcp_configs.arn,
           aws_dynamodb_table.artifacts.arn,
-          aws_dynamodb_table.summaries.arn
+          "${aws_dynamodb_table.artifacts.arn}/index/*",
+          aws_dynamodb_table.summaries.arn,
+          aws_dynamodb_table.users.arn,
+          "${aws_dynamodb_table.users.arn}/index/*"
         ]
       }
     ]
@@ -127,6 +130,72 @@ resource "aws_iam_role_policy" "apigateway_management" {
         ]
         Resource = [
           "arn:aws:execute-api:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*/*"
+        ]
+      }
+    ]
+  })
+}
+
+# SSM Parameter Store access (for JWT secret)
+resource "aws_iam_role_policy" "ssm_access" {
+  name = "${var.project_name}-ssm-access"
+  role = aws_iam_role.lambda_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters"
+        ]
+        Resource = [
+          aws_ssm_parameter.jwt_secret.arn
+        ]
+      }
+    ]
+  })
+}
+
+# S3 Vectors access policy for semantic memory storage
+resource "aws_iam_role_policy" "s3vectors_access" {
+  name = "${var.project_name}-s3vectors-access"
+  role = aws_iam_role.lambda_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3vectors:*"
+        ]
+        Resource = [
+          "arn:aws:s3vectors:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:bucket/${local.vectors_bucket_name}",
+          "arn:aws:s3vectors:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:bucket/${local.vectors_bucket_name}/*",
+          "arn:aws:s3vectors:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+        ]
+      }
+    ]
+  })
+}
+
+# Bedrock Titan Embeddings access policy
+resource "aws_iam_role_policy" "bedrock_embeddings_access" {
+  name = "${var.project_name}-bedrock-embeddings-access"
+  role = aws_iam_role.lambda_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel"
+        ]
+        Resource = [
+          "arn:aws:bedrock:${var.aws_region}::foundation-model/amazon.titan-embed-text-v2:0"
         ]
       }
     ]

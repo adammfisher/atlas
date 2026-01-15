@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-import { Code, Download, X, Eye, Maximize2, Minimize2, ChevronLeft, Copy, Check, GripVertical } from 'lucide-react'
-import { artifactsService } from '../../services/chatService'
+import { Code, Download, X, Eye, Maximize2, Minimize2, ChevronLeft, Copy, Check, GripVertical, FolderPlus, FileCode, Calendar, Clock } from 'lucide-react'
+import { artifactsService, projectsService } from '../../services/chatService'
 import {
   MarkdownRenderer,
   HTMLRenderer,
@@ -16,7 +16,7 @@ const ALLY_PINK = '#CD477E'
 const MIN_WIDTH = 380
 const MAX_WIDTH_PERCENT = 75 // Maximum 75% of screen width
 
-function ArtifactsPanel({ sessionId, artifacts: propArtifacts = [], isVisible = false, onClose, selectedArtifact, onSelectArtifact, streamingArtifact, fontFamily }) {
+function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], isVisible = false, onClose, selectedArtifact, onSelectArtifact, streamingArtifact, fontFamily, onFileSaved }) {
   const [isAnimating, setIsAnimating] = useState(false)
   // Fetched artifacts from backend
   const [fetchedArtifacts, setFetchedArtifacts] = useState([])
@@ -33,6 +33,9 @@ function ArtifactsPanel({ sessionId, artifacts: propArtifacts = [], isVisible = 
   const [panelWidth, setPanelWidth] = useState(500)
   // Dragging state
   const [isDragging, setIsDragging] = useState(false)
+  // Save to project state
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
   const containerRef = useRef(null)
   const panelRef = useRef(null)
 
@@ -70,21 +73,55 @@ function ArtifactsPanel({ sessionId, artifacts: propArtifacts = [], isVisible = 
     }
   }, [isVisible])
 
-  // Load content when selectedArtifact changes
+  // Track whether we're in streaming mode
+  const wasStreamingRef = useRef(false)
+  // Track the last streaming artifact to detect completion
+  const lastStreamingArtifactRef = useRef(null)
+
+  // Handle streaming artifact content updates AND transition to completed
   useEffect(() => {
-    if (selectedArtifact && !streamingArtifact) {
+    console.log('[ArtifactsPanel] streamingArtifact effect:', streamingArtifact?.id, 'content length:', streamingArtifact?.content?.length)
+
+    if (streamingArtifact) {
+      // We're actively streaming
+      wasStreamingRef.current = true
+      lastStreamingArtifactRef.current = streamingArtifact
+      // Always update content when streaming artifact exists, even if content is empty string
+      setArtifactContent(streamingArtifact.content || '')
+    } else if (wasStreamingRef.current) {
+      // Streaming just ended - streamingArtifact went from non-null to null
+      console.log('[ArtifactsPanel] Streaming ended! wasStreaming:', wasStreamingRef.current, 'selectedArtifact:', selectedArtifact?.id)
+      wasStreamingRef.current = false
+
+      // When streaming ends, the selectedArtifact should have the complete content
+      // Use it directly if it has content, otherwise keep what we have from streaming
+      if (selectedArtifact && selectedArtifact.content) {
+        console.log('[ArtifactsPanel] Using selectedArtifact content after streaming ended:', selectedArtifact.content.length, 'chars')
+        setArtifactContent(selectedArtifact.content)
+      } else if (lastStreamingArtifactRef.current?.content) {
+        // Fallback: use the last streamed content if selectedArtifact doesn't have content yet
+        console.log('[ArtifactsPanel] Keeping last streaming content:', lastStreamingArtifactRef.current.content.length, 'chars')
+        setArtifactContent(lastStreamingArtifactRef.current.content)
+      }
+      lastStreamingArtifactRef.current = null
+    }
+  }, [streamingArtifact, streamingArtifact?.content, selectedArtifact])
+
+  // Handle selectedArtifact changes (for non-streaming cases like clicking on list)
+  useEffect(() => {
+    // Skip if we're currently streaming - the above effect handles that
+    if (streamingArtifact || wasStreamingRef.current) {
+      return
+    }
+
+    console.log('[ArtifactsPanel] selectedArtifact change (non-streaming):', selectedArtifact?.id, 'content:', selectedArtifact?.content?.length)
+
+    if (selectedArtifact) {
       loadArtifactContent(selectedArtifact)
-    } else if (!selectedArtifact && !streamingArtifact) {
+    } else {
       setArtifactContent(null)
     }
-  }, [selectedArtifact, streamingArtifact])
-
-  // Update content when streaming artifact changes
-  useEffect(() => {
-    if (streamingArtifact?.content) {
-      setArtifactContent(streamingArtifact.content)
-    }
-  }, [streamingArtifact?.content])
+  }, [selectedArtifact])
 
   // Handle fullscreen change events
   useEffect(() => {
@@ -144,16 +181,19 @@ function ArtifactsPanel({ sessionId, artifacts: propArtifacts = [], isVisible = 
   }
 
   const loadArtifactContent = async (artifact) => {
+    console.log('[ArtifactsPanel] loadArtifactContent called for:', artifact?.title || artifact?.name, 'has content:', !!artifact?.content, 'content length:', artifact?.content?.length)
     setActiveTab('preview')
 
     // If artifact already has content (e.g., from streaming), use it directly
     if (artifact.content) {
+      console.log('[ArtifactsPanel] Setting content from artifact.content directly')
       setArtifactContent(artifact.content)
       setIsLoadingContent(false)
       return
     }
 
     // Otherwise, fetch from backend
+    console.log('[ArtifactsPanel] Fetching content from backend...')
     setArtifactContent(null)
     setIsLoadingContent(true)
 
@@ -247,6 +287,43 @@ function ArtifactsPanel({ sessionId, artifacts: propArtifacts = [], isVisible = 
     }
   }
 
+  const handleSaveToProject = async () => {
+    if (!projectId || !displayArtifact) return
+
+    const content = artifactContent || displayArtifact?.content
+    if (!content) return
+
+    setIsSaving(true)
+    setSaveSuccess(false)
+
+    try {
+      // Build filename from artifact name/title
+      let filename = displayArtifact.name || displayArtifact.title || 'artifact'
+      // Ensure it has the right extension
+      if (displayArtifact.file_extension && !filename.endsWith(displayArtifact.file_extension)) {
+        filename = filename + displayArtifact.file_extension
+      }
+
+      await projectsService.saveArtifactToProject(projectId, {
+        filename,
+        content,
+        artifactId: displayArtifact.id,
+        artifactTitle: displayArtifact.title || displayArtifact.name,
+        pinned: false
+      })
+
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 2000)
+
+      // Notify parent to refresh files list
+      onFileSaved?.()
+    } catch (err) {
+      console.error('Failed to save artifact to project:', err)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const handleDragStart = (e) => {
     e.preventDefault()
     setIsDragging(true)
@@ -281,7 +358,15 @@ function ArtifactsPanel({ sessionId, artifacts: propArtifacts = [], isVisible = 
 
   // Render artifact content
   const renderContent = () => {
+    console.log('[ArtifactsPanel] renderContent called:', {
+      isLoadingContent,
+      streamingArtifact: streamingArtifact?.id,
+      artifactContent: artifactContent ? `${artifactContent.length} chars` : null,
+      selectedArtifact: selectedArtifact?.id
+    })
+
     if (isLoadingContent && !streamingArtifact) {
+      console.log('[ArtifactsPanel] Showing loading spinner (backend fetch)')
       return (
         <div className="flex items-center justify-center h-full">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ALLY_PINK }} />
@@ -289,13 +374,27 @@ function ArtifactsPanel({ sessionId, artifacts: propArtifacts = [], isVisible = 
       )
     }
 
-    if (!artifactContent) {
+    if (!artifactContent && !streamingArtifact) {
+      console.log('[ArtifactsPanel] Showing "No content available"')
       return (
         <div className="flex items-center justify-center h-full" style={{ color: 'var(--text-muted)' }}>
           <p>No content available</p>
         </div>
       )
     }
+
+    // During streaming with no content yet, show loading indicator
+    if (streamingArtifact && !artifactContent) {
+      console.log('[ArtifactsPanel] Showing "Generating content..." spinner')
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-3" style={{ color: 'var(--text-muted)' }}>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ALLY_PINK }} />
+          <p>Generating content...</p>
+        </div>
+      )
+    }
+
+    console.log('[ArtifactsPanel] Rendering actual content for:', displayArtifact?.title)
 
     if (activeTab === 'source') {
       return <CodeRenderer content={artifactContent} fileExtension={displayArtifact?.file_extension} />
@@ -332,68 +431,148 @@ function ArtifactsPanel({ sessionId, artifacts: propArtifacts = [], isVisible = 
     }
   }
 
+  // Format date for display
+  const formatDate = (dateValue) => {
+    if (!dateValue) return '-'
+    const date = new Date(dateValue)
+    if (isNaN(date.getTime())) return '-'
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  const formatTime = (dateValue) => {
+    if (!dateValue) return ''
+    const date = new Date(dateValue)
+    if (isNaN(date.getTime())) return ''
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  }
+
   // Render artifact list (when no artifact is selected)
   const renderArtifactList = () => (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: 'var(--border-color)' }}>
-        <h2 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Artifacts</h2>
+        <div className="flex items-center gap-2">
+          <FileCode size={18} style={{ color: ALLY_PINK }} />
+          <h2 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Artifacts</h2>
+          <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+            {artifacts.length}
+          </span>
+        </div>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg transition-colors"
+          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-tertiary)]"
           style={{ color: 'var(--text-muted)' }}
         >
           <X size={18} />
         </button>
       </div>
 
-      {/* Artifacts List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      {/* Artifacts Table */}
+      <div className="flex-1 overflow-y-auto">
         {artifacts.length === 0 ? (
-          <div className="text-center py-8">
+          <div className="text-center py-12">
+            <FileCode size={40} style={{ color: 'var(--text-muted)', opacity: 0.3 }} className="mx-auto mb-3" />
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
               No artifacts yet
             </p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)', opacity: 0.7 }}>
+              Artifacts will appear here as they are created
+            </p>
           </div>
         ) : (
-          artifacts.map((artifact, index) => (
-            <div
-              key={artifact.id || index}
-              className="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors"
-              style={{
-                backgroundColor: selectedArtifact?.id === artifact.id ? 'var(--bg-tertiary)' : 'transparent',
-                opacity: isAnimating ? 1 : 0,
-                transform: isAnimating ? 'translateX(0)' : 'translateX(10px)',
-                transition: `all 200ms ease ${index * 30}ms`
-              }}
-              onClick={() => handleView(artifact)}
-            >
-              {/* Icon */}
-              <div
-                className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: 'var(--bg-secondary)' }}
-              >
-                <Code size={18} style={{ color: 'var(--text-muted)' }} />
-              </div>
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                  {artifact.title || artifact.name}
-                </div>
-                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Code · {getTypeLabel(artifact)}
-                </div>
-              </div>
-              {/* Download */}
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDownload(artifact) }}
-                className="p-1.5 rounded transition-colors hover:bg-[hsl(220,13%,26%)]"
-                style={{ color: 'hsl(220, 13%, 55%)' }}
-              >
-                <Download size={16} />
-              </button>
-            </div>
-          ))
+          <table className="w-full">
+            <thead>
+              <tr className="border-b" style={{ borderColor: 'var(--border-color)' }}>
+                <th className="text-left text-xs font-medium px-4 py-2" style={{ color: 'var(--text-muted)' }}>Name</th>
+                <th className="text-left text-xs font-medium px-2 py-2 hidden sm:table-cell" style={{ color: 'var(--text-muted)' }}>Type</th>
+                <th className="text-left text-xs font-medium px-2 py-2 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Created</th>
+                <th className="text-left text-xs font-medium px-2 py-2 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>Modified</th>
+                <th className="text-right text-xs font-medium px-4 py-2" style={{ color: 'var(--text-muted)' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {artifacts.map((artifact, index) => (
+                <tr
+                  key={artifact.id || index}
+                  className="border-b transition-colors hover:bg-[var(--bg-secondary)] cursor-pointer"
+                  style={{
+                    borderColor: 'var(--border-color)',
+                    opacity: isAnimating ? 1 : 0,
+                    transform: isAnimating ? 'translateY(0)' : 'translateY(5px)',
+                    transition: `all 200ms ease ${index * 30}ms`
+                  }}
+                  onClick={() => handleView(artifact)}
+                >
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                      >
+                        <Code size={14} style={{ color: ALLY_PINK }} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                          {artifact.title || artifact.name || 'Untitled'}
+                        </div>
+                        <div className="text-xs truncate sm:hidden" style={{ color: 'var(--text-muted)' }}>
+                          {getTypeLabel(artifact)}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-2 py-3 hidden sm:table-cell">
+                    <span className="text-xs px-2 py-1 rounded" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                      {getTypeLabel(artifact)}
+                    </span>
+                  </td>
+                  <td className="px-2 py-3 hidden lg:table-cell">
+                    <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <Calendar size={12} />
+                      <span>{formatDate(artifact.createdAt || artifact.created_at)}</span>
+                    </div>
+                    {(artifact.createdAt || artifact.created_at) && (
+                      <div className="flex items-center gap-1.5 text-xs mt-0.5" style={{ color: 'var(--text-muted)', opacity: 0.7 }}>
+                        <Clock size={10} />
+                        <span>{formatTime(artifact.createdAt || artifact.created_at)}</span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-2 py-3 hidden lg:table-cell">
+                    <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <Clock size={12} />
+                      <span>{formatDate(artifact.updatedAt || artifact.updated_at || artifact.createdAt || artifact.created_at)}</span>
+                    </div>
+                    {(artifact.updatedAt || artifact.updated_at || artifact.createdAt || artifact.created_at) && (
+                      <div className="flex items-center gap-1.5 text-xs mt-0.5" style={{ color: 'var(--text-muted)', opacity: 0.7 }}>
+                        <span>{formatTime(artifact.updatedAt || artifact.updated_at || artifact.createdAt || artifact.created_at)}</span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleView(artifact) }}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors hover:bg-[var(--bg-tertiary)]"
+                        style={{ color: ALLY_PINK }}
+                      >
+                        <Eye size={14} />
+                        <span className="hidden sm:inline">View</span>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDownload(artifact) }}
+                        className="p-1.5 rounded transition-colors hover:bg-[var(--bg-tertiary)]"
+                        style={{ color: 'var(--text-muted)' }}
+                        title="Download"
+                      >
+                        <Download size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
@@ -427,8 +606,9 @@ function ArtifactsPanel({ sessionId, artifacts: propArtifacts = [], isVisible = 
             {getTypeLabel(displayArtifact)}
           </span>
           {streamingArtifact && (
-            <div className="flex items-center gap-1.5 ml-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            <div className="flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)' }}>
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[11px] font-medium text-green-500">Building...</span>
             </div>
           )}
         </div>
@@ -444,6 +624,19 @@ function ArtifactsPanel({ sessionId, artifacts: propArtifacts = [], isVisible = 
             {copied ? <Check size={14} /> : <Copy size={14} />}
             <span className="text-[11px]">{copied ? 'Copied' : 'Copy'}</span>
           </button>
+          {/* Save to Project - only show if within a project */}
+          {projectId && !streamingArtifact && (
+            <button
+              onClick={handleSaveToProject}
+              disabled={isSaving}
+              className="flex items-center gap-1 px-2 py-1 rounded transition-colors hover:bg-[var(--bg-secondary)]"
+              style={{ color: saveSuccess ? '#10b981' : 'var(--text-muted)' }}
+              title="Save to project files"
+            >
+              {saveSuccess ? <Check size={14} /> : <FolderPlus size={14} />}
+              <span className="text-[11px]">{isSaving ? 'Saving...' : saveSuccess ? 'Saved' : 'Add to Project'}</span>
+            </button>
+          )}
           {/* Download */}
           <button
             onClick={() => handleDownload(displayArtifact)}

@@ -307,8 +307,9 @@ VITE_STREAM_URL=http://localhost:8000/api/chat/message/stream
 const MCP_URL = 'http://localhost:3001';
 const AWS_API_URL = 'https://famlht6lp2.execute-api.us-east-1.amazonaws.com';
 const MODELS = {
-  haiku: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
-  sonnet: 'us.anthropic.claude-sonnet-4-20250514-v1:0'
+  haiku: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+  sonnet: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+  opus: 'us.anthropic.claude-opus-4-5-20251101-v1:0'
 };
 ```
 

@@ -6,10 +6,10 @@ const {
   badRequest,
   notFound,
   serverError,
-  getUserId,
   parseBody,
   getPathParam
 } = require('./shared/response');
+const { authenticateRequest, authErrorResponse } = require('./shared/authMiddleware');
 
 const MCP_CONFIGS_TABLE = process.env.MCP_CONFIGS_TABLE;
 
@@ -28,6 +28,14 @@ const DEFAULT_CONNECTORS = [
 exports.handler = async (event) => {
   console.log('MCP Config event:', JSON.stringify(event));
 
+  // Authenticate request
+  let user;
+  try {
+    user = authenticateRequest(event);
+  } catch (error) {
+    return authErrorResponse(error);
+  }
+
   const method = event.requestContext?.http?.method || event.httpMethod;
   const path = event.requestContext?.http?.path || event.path;
   const serverId = getPathParam(event, 'serverId');
@@ -35,28 +43,28 @@ exports.handler = async (event) => {
   try {
     // Handle available connectors endpoint
     if (path.includes('/connectors/available')) {
-      return getAvailableConnectors(event);
+      return getAvailableConnectors(user.userId);
     }
 
     // Handle tools endpoint - fetch tools from all enabled MCP servers
     if (path.includes('/mcp/tools')) {
-      return getAllMcpTools(event);
+      return getAllMcpTools(user.userId);
     }
 
     // Handle tool execution - proxy to appropriate MCP server
     if (path.includes('/mcp/execute') && method === 'POST') {
-      return executeMcpTool(event);
+      return executeMcpTool(user.userId, event);
     }
 
     // Route MCP server management
     if (method === 'GET' && !serverId) {
-      return listMcpServers(event);
+      return listMcpServers(user.userId);
     } else if (method === 'POST') {
-      return createMcpServer(event);
+      return createMcpServer(user.userId, event);
     } else if (method === 'PUT' && serverId) {
-      return updateMcpServer(event, serverId);
+      return updateMcpServer(user.userId, serverId, event);
     } else if (method === 'DELETE' && serverId) {
-      return deleteMcpServer(event, serverId);
+      return deleteMcpServer(user.userId, serverId);
     }
 
     return badRequest('Invalid route');
@@ -69,9 +77,7 @@ exports.handler = async (event) => {
 /**
  * Get available connectors (default + user configured)
  */
-async function getAvailableConnectors(event) {
-  const userId = getUserId(event);
-  
+async function getAvailableConnectors(userId) {
   // Get user's configured servers
   const userServers = await queryItems(MCP_CONFIGS_TABLE, {
     expression: 'userId = :userId',
@@ -112,9 +118,7 @@ async function getAvailableConnectors(event) {
 /**
  * List user's MCP server configurations
  */
-async function listMcpServers(event) {
-  const userId = getUserId(event);
-  
+async function listMcpServers(userId) {
   const servers = await queryItems(MCP_CONFIGS_TABLE, {
     expression: 'userId = :userId',
     values: { ':userId': userId }
@@ -138,8 +142,7 @@ async function listMcpServers(event) {
 /**
  * Create a new MCP server configuration
  */
-async function createMcpServer(event) {
-  const userId = getUserId(event);
+async function createMcpServer(userId, event) {
   const body = parseBody(event);
   
   const { name, url, icon, description, type = 'url' } = body;
@@ -188,8 +191,7 @@ async function createMcpServer(event) {
 /**
  * Update an MCP server configuration
  */
-async function updateMcpServer(event, serverId) {
-  const userId = getUserId(event);
+async function updateMcpServer(userId, serverId, event) {
   const body = parseBody(event);
   
   // Verify server exists
@@ -241,9 +243,7 @@ async function updateMcpServer(event, serverId) {
 /**
  * Delete an MCP server configuration
  */
-async function deleteMcpServer(event, serverId) {
-  const userId = getUserId(event);
-
+async function deleteMcpServer(userId, serverId) {
   // Verify server exists
   const server = await getItem(MCP_CONFIGS_TABLE, { userId, serverId });
   if (!server) {
@@ -258,9 +258,7 @@ async function deleteMcpServer(event, serverId) {
 /**
  * Fetch tools from all enabled MCP servers
  */
-async function getAllMcpTools(event) {
-  const userId = getUserId(event);
-
+async function getAllMcpTools(userId) {
   // Get user's enabled servers
   const userServers = await queryItems(MCP_CONFIGS_TABLE, {
     expression: 'userId = :userId',
@@ -331,8 +329,7 @@ async function getAllMcpTools(event) {
 /**
  * Execute a tool on the appropriate MCP server
  */
-async function executeMcpTool(event) {
-  const userId = getUserId(event);
+async function executeMcpTool(userId, event) {
   const body = parseBody(event);
 
   const { tool, arguments: args, server_id } = body;

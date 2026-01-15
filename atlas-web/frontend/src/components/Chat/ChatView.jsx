@@ -9,9 +9,10 @@ import ChatInput from './ChatInput'
 import ChatTitleBar from './ChatTitleBar'
 import ThinkingSteps from './ThinkingSteps'
 import StreamingIndicator from './StreamingIndicator'
-import InlineArtifact, { parseMessageForArtifacts, extractTitleFromContent } from '../Artifacts/InlineArtifact'
+import MessageFileCard from './MessageFileCard'
+import InlineArtifact, { parseMessageForArtifacts, extractTitleFromContent, generateArtifactHash, StreamingArtifactCard } from '../Artifacts/InlineArtifact'
 
-function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, onOpenArtifactInPanel, onArtifactStreaming, showArtifacts = false, onArtifactsDetected }) {
+function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [], onArtifactCreated, onOpenArtifactInPanel, onArtifactStreaming, showArtifacts = false, onArtifactsDetected }) {
   const { sessionId, projectId } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -28,6 +29,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
   // Track streaming artifact detection
   const streamingArtifactRef = useRef(null)
   const artifactContentRef = useRef('')
+  // Local state for streaming artifact (for rendering inline card)
+  const [currentStreamingArtifact, setCurrentStreamingArtifact] = useState(null)
   // AbortController for stopping streaming
   const abortControllerRef = useRef(null)
 
@@ -46,6 +49,7 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
     setSessionMessages,
     chatFont,
     _hasHydrated,
+    setProjectMemoryContext,
   } = useChatStore()
 
   // Derive messages from messagesBySession for current session
@@ -281,6 +285,42 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
       setShowThinkingSteps(true)
     }
 
+    const handleMemoryContext = (data) => {
+      console.log('Memory context received:', data)
+      // Store the memory context in the global store for display in project sidebar
+      if (projectId && data) {
+        setProjectMemoryContext(projectId, {
+          semanticMemoryCount: data.semanticMemoryCount || 0,
+          relevantConversationsCount: data.relevantConversationsCount || 0,
+          projectName: data.projectName,
+          memories: data.memories || [],
+          conversations: data.conversations || []
+        })
+        // Add to thinking steps if we have memories
+        if (data.semanticMemoryCount > 0 || data.relevantConversationsCount > 0) {
+          const step = {
+            type: 'memory_context',
+            semanticMemoryCount: data.semanticMemoryCount,
+            relevantConversationsCount: data.relevantConversationsCount
+          }
+          updateThinkingSteps([...thinkingStepsRef.current, step])
+          setShowThinkingSteps(true)
+        }
+      }
+    }
+
+    const handleCompaction = (data) => {
+      console.log('Compaction notification received:', data)
+      // Add compaction notification to thinking steps
+      const step = {
+        type: 'compaction',
+        message: data.message,
+        stats: data.stats
+      }
+      updateThinkingSteps([...thinkingStepsRef.current, step])
+      setShowThinkingSteps(true)
+    }
+
     const handleArtifact = (artifactEvent) => {
       console.log('Artifact event:', artifactEvent)
       if (artifactEvent.event === 'start' && onArtifactStreaming) {
@@ -300,10 +340,16 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
           'python': { ext: '.py', name: 'Python' },
         }
         const info = typeInfo[artifact.type] || { ext: `.${artifact.type}`, name: artifact.name }
+        // Use the actual title from the artifact event, fall back to type name
+        const displayTitle = artifact.title || info.name
+        // CRITICAL: Use the ID from the backend (stable hash already generated)
+        // This ensures start and complete events use the same ID
+        const stableId = artifact.id || generateArtifactHash(displayTitle, artifact.type)
+        console.log('[ChatView] Artifact start - backend ID:', artifact.id, 'displayTitle:', displayTitle, 'stableId:', stableId)
         streamingArtifactRef.current = {
-          id: artifact.id,
-          name: info.name,
-          title: info.name,
+          id: stableId,
+          name: displayTitle,
+          title: displayTitle,
           type: artifact.type,
           file_extension: info.ext,
           renderable: true,
@@ -311,6 +357,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
           created_at: new Date().toISOString(),
           content: ''
         }
+        // Update local state for inline card rendering
+        setCurrentStreamingArtifact(streamingArtifactRef.current)
         onArtifactStreaming(streamingArtifactRef.current)
       } else if (artifactEvent.event === 'delta' && onArtifactStreaming) {
         // Update streaming artifact with new content from backend
@@ -322,46 +370,80 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
             content: artifact.content || ''
           }
           streamingArtifactRef.current = updatedArtifact
+          // Update local state for inline card
+          setCurrentStreamingArtifact(updatedArtifact)
           onArtifactStreaming(updatedArtifact)
         }
       } else if (artifactEvent.event === 'complete') {
-        console.log('Artifact complete event received')
+        console.log('[ChatView] Artifact complete event received:', artifactEvent)
         // Finalize the artifact with content from the backend event
         const artifact = artifactEvent.artifact
         const content = artifact?.content || artifactContentRef.current
+        console.log('[ChatView] Content length:', content?.length, 'from event:', !!artifact?.content, 'from ref:', !!artifactContentRef.current)
         if (onArtifactCreated) {
-          // Extract title from the content
           const artifactType = artifact?.type || streamingArtifactRef.current?.type || 'markdown'
-          const extractedTitle = extractTitleFromContent(
-            content,
-            artifactType,
-            artifact?.title || artifact?.name || streamingArtifactRef.current?.name
-          )
+          // CRITICAL: Use the title from the backend (from <artifact title="...">) as primary source
+          // This MUST match what was used in artifact_start to prevent duplicates
+          // Only use the artifact.id from backend which is already the stable hash
+          const backendTitle = artifact?.title || artifact?.name
+          const backendId = artifact?.id
+          // Use backend's stable ID if available (ensures consistency)
+          // Otherwise generate from backend title (fallback)
+          const stableId = backendId || generateArtifactHash(backendTitle, artifactType)
+          const finalTitle = backendTitle || streamingArtifactRef.current?.title || 'Untitled Artifact'
           const finalArtifact = {
-            id: artifact?.id || streamingArtifactRef.current?.id || `artifact_${Date.now()}`,
-            name: extractedTitle,
-            title: extractedTitle,
+            id: stableId,
+            name: finalTitle,
+            title: finalTitle,
             type: artifactType,
             content: content,
             size: content.length,
-            file_extension: streamingArtifactRef.current?.file_extension || `.${artifactType}`,
+            file_extension: artifact?.file_extension || streamingArtifactRef.current?.file_extension || `.${artifactType}`,
             renderable: true,
-            version: 1,
+            version: artifact?.version || 1,
             created_at: new Date().toISOString()
           }
-          console.log('Creating final artifact:', finalArtifact.id, 'with title:', extractedTitle)
+          console.log('[ChatView] Creating final artifact:', finalArtifact.id, 'title:', finalTitle, 'backendId:', backendId, 'content length:', content.length)
           onArtifactCreated(finalArtifact)
+          console.log('[ChatView] Clearing streamingArtifactRef and artifactContentRef')
           streamingArtifactRef.current = null
           artifactContentRef.current = ''
+          // Clear local state
+          console.log('[ChatView] Clearing currentStreamingArtifact state')
+          setCurrentStreamingArtifact(null)
         }
       }
     }
 
-    // Update streaming artifact content (extracts content from code block)
+    // Update streaming artifact content (extracts content from code block or <artifact> tag)
     const updateStreamingArtifact = (fullContent) => {
       if (!streamingArtifactRef.current) return
 
-      // Find the content after the opening ``` tag
+      // First try to extract content from <artifact> tags
+      const artifactTagMatch = fullContent.match(/<artifact[^>]*>([\s\S]*)/)
+      if (artifactTagMatch) {
+        let content = artifactTagMatch[1]
+        // Check if artifact is complete (has closing tag)
+        const endIndex = content.indexOf('</artifact>')
+        if (endIndex !== -1) {
+          content = content.substring(0, endIndex)
+        }
+        // Only update if content has changed
+        if (content !== artifactContentRef.current) {
+          artifactContentRef.current = content
+          if (onArtifactStreaming) {
+            onArtifactStreaming({
+              ...streamingArtifactRef.current,
+              content: content
+            })
+          }
+          // Also update local state for inline card
+          setCurrentStreamingArtifact(prev => prev ? { ...prev, content } : null)
+        }
+        return
+      }
+
+      // Fall back to code fence extraction for legacy format
       const artifactType = streamingArtifactRef.current.type
       // Build regex pattern to match the code fence and capture content after it
       const langPattern = artifactType === 'markdown' ? '(?:markdown|md)' : artifactType
@@ -388,6 +470,9 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
       }
     }
 
+    // Reset artifact streaming state for new message
+    window._artifactStreamState = { insideArtifact: false, buffer: '' }
+
     try {
       // Create AbortController for this stream request
       abortControllerRef.current = new AbortController()
@@ -402,14 +487,62 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
           model,
           webSearchEnabled,
           enabledConnectors,
+          existingArtifacts,
           (chunk) => {
             // Mark processing as done when we start receiving content
-            thinkingStepsRef.current = thinkingStepsRef.current.map(step =>
-              step.type === 'processing' ? { ...step, loading: false } : step
+            const hasProcessing = thinkingStepsRef.current.some(step =>
+              step.type === 'processing' && step.loading
             )
-            setThinkingSteps([...thinkingStepsRef.current])
+            if (hasProcessing) {
+              const updatedSteps = thinkingStepsRef.current.map(step =>
+                step.type === 'processing' ? { ...step, loading: false } : step
+              )
+              updateThinkingSteps(updatedSteps)
+            }
+
+            // Use shared artifact filtering state
+            const state = window._artifactStreamState
+
+            // Accumulate full response for artifact extraction
             fullResponseRef.current += chunk
-            updateLastMessage(prev => prev + chunk)
+
+            // Add chunk to buffer
+            state.buffer += chunk
+
+            // Process buffer to extract display text (filtering out artifact content)
+            let displayText = ''
+
+            while (state.buffer.length > 0) {
+              if (state.insideArtifact) {
+                const closeIndex = state.buffer.indexOf('</artifact>')
+                if (closeIndex !== -1) {
+                  state.insideArtifact = false
+                  state.buffer = state.buffer.substring(closeIndex + '</artifact>'.length)
+                } else {
+                  break
+                }
+              } else {
+                const openIndex = state.buffer.indexOf('<artifact')
+                if (openIndex !== -1) {
+                  displayText += state.buffer.substring(0, openIndex)
+                  state.insideArtifact = true
+                  state.buffer = state.buffer.substring(openIndex)
+                } else if (state.buffer.length > 50 || !state.buffer.includes('<a')) {
+                  // Flush buffer if it's long enough or doesn't contain start of <artifact tag
+                  // Changed from checking for any '<' to specifically '<a' to avoid false holds
+                  displayText += state.buffer
+                  state.buffer = ''
+                } else {
+                  break
+                }
+              }
+            }
+
+            // Only update display if we have non-artifact content
+            if (displayText && displayText.trim()) {
+              updateLastMessage(prev => prev + displayText)
+            }
+
             // Update streaming artifact content if backend initiated one
             if (streamingArtifactRef.current) {
               updateStreamingArtifact(fullResponseRef.current)
@@ -418,6 +551,13 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
           (result) => {
             setIsStreaming(false)
             setMessageStreaming(false)
+
+            // Flush any remaining buffer content
+            const state = window._artifactStreamState
+            if (state && state.buffer && !state.insideArtifact) {
+              updateLastMessage(prev => prev + state.buffer)
+              state.buffer = ''
+            }
 
             // If this was a new session, migrate temp session to backend session ID
             if (isNewSession && result.session_id && tempSessionId) {
@@ -463,6 +603,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
           handleSearchResults,
           handleProcessing,
           handleArtifact,
+          handleMemoryContext,
+          handleCompaction,
           signal
         )
       } else {
@@ -474,9 +616,69 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
           webSearchEnabled,
           knowledgeCoreEnabled,
           enabledConnectors,
+          existingArtifacts,
           (chunk) => {
+            // Track if we're inside an artifact (state persists across chunks)
+            if (!window._artifactStreamState) {
+              window._artifactStreamState = { insideArtifact: false, buffer: '' }
+            }
+            const state = window._artifactStreamState
+
+            // Accumulate full response for artifact extraction
             fullResponseRef.current += chunk
-            updateLastMessage(prev => prev + chunk)
+
+            // Add chunk to buffer
+            state.buffer += chunk
+
+            // Process buffer to extract display text (filtering out artifact content)
+            let displayText = ''
+
+            while (state.buffer.length > 0) {
+              if (state.insideArtifact) {
+                // Look for closing tag
+                const closeIndex = state.buffer.indexOf('</artifact>')
+                if (closeIndex !== -1) {
+                  // Found closing tag - discard artifact content and switch to normal mode
+                  state.insideArtifact = false
+                  state.buffer = state.buffer.substring(closeIndex + '</artifact>'.length)
+                } else {
+                  // Still waiting for close tag - hold entire buffer
+                  break
+                }
+              } else {
+                // Look for opening tag
+                const openIndex = state.buffer.indexOf('<artifact')
+                if (openIndex !== -1) {
+                  // Found opening tag - extract text before it, then switch to artifact mode
+                  displayText += state.buffer.substring(0, openIndex)
+                  state.insideArtifact = true
+                  state.buffer = state.buffer.substring(openIndex)
+                } else if (state.buffer.length > 50 || !state.buffer.includes('<a')) {
+                  // Flush buffer if it's long enough or doesn't contain start of <artifact tag
+                  // Changed from checking for any '<' to specifically '<a' to avoid false holds
+                  displayText += state.buffer
+                  state.buffer = ''
+                } else {
+                  // Could be partial tag, hold buffer
+                  break
+                }
+              }
+            }
+
+            // Only update display if we have non-artifact content
+            if (displayText && displayText.trim()) {
+              updateLastMessage(prev => {
+                // Skip if this exact text already exists (deduplication)
+                if (prev.includes(displayText)) return prev
+                // Check if this is cumulative content (new text extends existing)
+                // This handles cases where backend sends full content on each chunk
+                if (displayText.startsWith(prev.trim())) {
+                  return displayText
+                }
+                return prev + displayText
+              })
+            }
+
             // Update streaming artifact content if backend initiated one
             if (streamingArtifactRef.current) {
               updateStreamingArtifact(fullResponseRef.current)
@@ -485,6 +687,36 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
           (result) => {
             setIsStreaming(false)
             setMessageStreaming(false)
+
+            // Flush any remaining buffer content
+            const state = window._artifactStreamState
+            if (state && state.buffer && !state.insideArtifact) {
+              updateLastMessage(prev => prev + state.buffer)
+              state.buffer = ''
+            }
+
+            // Clean up displayed message - remove duplicates caused by backend
+            updateLastMessage(prev => {
+              // Extract artifact-free content and remove duplicate progressive lines
+              const lines = prev.split('\n')
+              const cleanedLines = []
+              for (const line of lines) {
+                // Skip if this line is a prefix of a later line we've already seen
+                const isDuplicate = cleanedLines.some(existing =>
+                  existing.startsWith(line) && existing !== line
+                )
+                if (!isDuplicate) {
+                  // Also skip if this line is just a longer version of the last line
+                  const lastLine = cleanedLines[cleanedLines.length - 1]
+                  if (lastLine && line.startsWith(lastLine)) {
+                    cleanedLines[cleanedLines.length - 1] = line
+                  } else {
+                    cleanedLines.push(line)
+                  }
+                }
+              }
+              return cleanedLines.join('\n')
+            })
 
             // If this was a new session, migrate temp session to backend session ID
             if (isNewSession && result.session_id && tempSessionId) {
@@ -531,6 +763,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
           handleProcessing,
           handleArtifact,
           handleKnowledgeContext,
+          handleMemoryContext,
+          handleCompaction,
           signal
         )
       }
@@ -646,6 +880,7 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
                   fontFamily={fontFamilies[chatFont] || fontFamilies.default}
                   onOpenArtifactInPanel={onOpenArtifactInPanel}
                   onViewKnowledgeArtifact={handleViewKnowledgeArtifact}
+                  streamingArtifact={message.isStreaming ? currentStreamingArtifact : null}
                 />
               ))}
               <div ref={messagesEndRef} />
@@ -692,16 +927,34 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, onArtifactCreated, on
   )
 }
 
-function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onOpenArtifactInPanel, onViewKnowledgeArtifact }) {
+function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onOpenArtifactInPanel, onViewKnowledgeArtifact, streamingArtifact }) {
   const isUser = message.role === 'user'
 
   // Parse message for artifacts (memoized to avoid re-parsing on every render)
+  // CRITICAL: Skip parsing during streaming to avoid duplicate key issues
+  // The streaming artifact is tracked separately via streamingArtifact prop
   const { artifacts, modifiedContent } = useMemo(() => {
     if (isUser || !message.content) {
       return { artifacts: [], modifiedContent: message.content || '' }
     }
+    // Don't parse during streaming - the raw artifact tags will show,
+    // but we're displaying the StreamingArtifactCard separately
+    if (isStreaming) {
+      return { artifacts: [], modifiedContent: message.content || '' }
+    }
     return parseMessageForArtifacts(message.content)
-  }, [message.content, isUser])
+  }, [message.content, isUser, isStreaming])
+
+  // Helper to clean artifact tags from streaming content
+  // This removes the visible <artifact> tags and their incomplete content during streaming
+  const cleanStreamingContent = (content) => {
+    if (!content) return content
+    // Remove complete <artifact ...>...</artifact> tags
+    let cleaned = content.replace(/<artifact\s+[^>]*>[\s\S]*?<\/artifact>/gi, '')
+    // Remove incomplete <artifact ...> tags (no closing tag)
+    cleaned = cleaned.replace(/<artifact\s+[^>]*>[\s\S]*$/gi, '')
+    return cleaned.trim()
+  }
 
   // Render content with artifact placeholders replaced by InlineArtifact components
   const renderContentWithArtifacts = () => {
@@ -735,22 +988,24 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
     }
 
     if (artifacts.length === 0) {
+      // During streaming, clean out artifact tags from visible content
+      const displayContent = isStreaming ? cleanStreamingContent(message.content) : message.content
       return (
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={markdownComponents}
         >
-          {message.content || ' '}
+          {displayContent || ' '}
         </ReactMarkdown>
       )
     }
 
     // Split content by artifact placeholders and render
-    // The placeholder format is __ARTIFACT_inline_art_TIMESTAMP_INDEX__
-    const parts = modifiedContent.split(/(__ARTIFACT_inline_art_\d+_\d+__)/)
+    // The placeholder format is __ARTIFACT_art_HASH__ or __ARTIFACT_inline_art_TIMESTAMP_INDEX__ (legacy)
+    const parts = modifiedContent.split(/(__ARTIFACT_(?:inline_art_\d+_\d+|art_[a-z0-9]+)__)/)
     return parts.map((part, index) => {
-      // Check if this part is an artifact placeholder
-      const artifactMatch = part.match(/__ARTIFACT_(inline_art_\d+_\d+)__/)
+      // Check if this part is an artifact placeholder (both new and legacy formats)
+      const artifactMatch = part.match(/__ARTIFACT_((?:inline_art_\d+_\d+|art_[a-z0-9]+))__/)
       if (artifactMatch) {
         const artifact = artifacts.find(a => a.id === artifactMatch[1])
         if (artifact) {
@@ -787,24 +1042,7 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
           {message.files && message.files.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
               {message.files.map((file, idx) => (
-                file.previewUrl ? (
-                  <img
-                    key={idx}
-                    src={file.previewUrl}
-                    alt={file.name}
-                    className="w-16 h-16 object-cover rounded-lg"
-                    style={{ borderWidth: '1px', borderColor: 'var(--border-color)' }}
-                    title={file.name}
-                  />
-                ) : (
-                  <span
-                    key={idx}
-                    className="text-[11px] px-2 py-1 rounded-full"
-                    style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-muted)' }}
-                  >
-                    {file.name}
-                  </span>
-                )
+                <MessageFileCard key={idx} file={file} />
               ))}
             </div>
           )}
@@ -840,7 +1078,21 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
           }}
         >
           {renderContentWithArtifacts()}
+          {/* Show streaming artifact card inline at the end of content during artifact creation */}
+          {isStreaming && streamingArtifact && (
+            <StreamingArtifactCard
+              artifact={streamingArtifact}
+              onOpenInPanel={onOpenArtifactInPanel}
+            />
+          )}
         </div>
+      )}
+      {/* If no content yet but streaming an artifact, show the card */}
+      {isStreaming && streamingArtifact && (!message.content || message.content.trim() === '') && (
+        <StreamingArtifactCard
+          artifact={streamingArtifact}
+          onOpenInPanel={onOpenArtifactInPanel}
+        />
       )}
       {/* Show streaming indicator below content while streaming */}
       {isStreaming && (

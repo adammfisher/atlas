@@ -1,11 +1,33 @@
 /**
  * Chat Service - Connects to Atlas Lambda API
+ * All requests include credentials for JWT cookie authentication
+ * Cross-domain requests (Lambda Function URL) use Authorization Bearer header
  */
+
+import { getAuthToken } from './authService'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const STREAM_URL = import.meta.env.VITE_STREAM_URL || null
 
-const getUserIdHeader = () => ({ 'X-User-Id': 'demo-user' })
+// Fetch options with credentials for cookie-based auth (same-domain API Gateway)
+const fetchWithCredentials = (options = {}) => ({
+  ...options,
+  credentials: 'include'
+})
+
+// Fetch options for cross-domain Lambda Function URL (uses Bearer token)
+const fetchWithAuthHeader = (options = {}) => {
+  const token = getAuthToken()
+  const headers = {
+    ...(options.headers || {}),
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  }
+  return {
+    ...options,
+    headers,
+    credentials: 'include'
+  }
+}
 
 export const chatService = {
   /**
@@ -19,22 +41,22 @@ export const chatService = {
     try {
       // Query artifacts from Neo4j (works locally without OpenSearch)
       const [artifactsResponse, adrsResponse] = await Promise.all([
-        fetch(`${API_URL}/api/mcp/execute`, {
+        fetch(`${API_URL}/api/mcp/execute`, fetchWithCredentials({
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tool: 'search_artifacts',
             arguments: { query }
           })
-        }),
-        fetch(`${API_URL}/api/mcp/execute`, {
+        })),
+        fetch(`${API_URL}/api/mcp/execute`, fetchWithCredentials({
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tool: 'search_adrs',
             arguments: { query }
           })
-        })
+        }))
       ])
 
       const elapsed = Date.now() - startTime
@@ -108,7 +130,7 @@ export const chatService = {
     return contextBlock
   },
 
-  async streamMessage(message, sessionId, projectId, model = 'sonnet', webSearchEnabled = true, knowledgeCoreEnabled = true, enabledConnectors = [], onChunk, onComplete, onThinking = null, onSearchStart = null, onSearchResults = null, onProcessing = null, onArtifact = null, onKnowledgeContext = null, signal = null) {
+  async streamMessage(message, sessionId, projectId, model = 'sonnet', webSearchEnabled = true, knowledgeCoreEnabled = true, enabledConnectors = [], existingArtifacts = [], onChunk, onComplete, onThinking = null, onSearchStart = null, onSearchResults = null, onProcessing = null, onArtifact = null, onKnowledgeContext = null, onMemoryContext = null, onCompaction = null, signal = null) {
     // 1. Query Knowledge Core first (visible in browser network tab) - only if enabled
     let knowledgeContext = null
     if (knowledgeCoreEnabled) {
@@ -128,10 +150,14 @@ export const chatService = {
     // 4. Stream to chat endpoint (which proxies to AWS)
     // Send original message + knowledge_context separately so AWS can store clean message
     const url = STREAM_URL || `${API_URL}/api/chat/message/stream`
-    console.log('Streaming to URL:', url)
-    const response = await fetch(url, {
+    const isLambdaUrl = STREAM_URL && url.includes('lambda-url')
+    console.log('Streaming to URL:', url, isLambdaUrl ? '(Lambda Function URL - using Bearer auth)' : '(API Gateway - using cookies)')
+
+    // Use Bearer auth for Lambda Function URL (cross-domain), cookies for API Gateway
+    const fetchOptions = isLambdaUrl ? fetchWithAuthHeader : fetchWithCredentials
+    const response = await fetch(url, fetchOptions({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message,  // Original message for storage/title
         knowledge_context: knowledgeContextStr,  // Separate context for Claude
@@ -140,18 +166,20 @@ export const chatService = {
         model,
         web_search_enabled: webSearchEnabled,
         extended_thinking_enabled: false,
-        enabled_connectors: enabledConnectors
+        enabled_connectors: enabledConnectors,
+        existing_artifacts: existingArtifacts.map(a => ({ id: a.id, title: a.title || a.name, type: a.type }))
       }),
       signal
-    })
+    }))
     if (!response.ok) throw new Error('Failed to send message')
-    await this._processStream(response, onChunk, onComplete, onThinking, onSearchStart, onSearchResults, onProcessing, onArtifact, onKnowledgeContext)
+    await this._processStream(response, onChunk, onComplete, onThinking, onSearchStart, onSearchResults, onProcessing, onArtifact, onKnowledgeContext, onMemoryContext, onCompaction)
   },
 
-  async streamMessageWithFiles(message, files, sessionId, projectId, model = 'sonnet', webSearchEnabled = true, enabledConnectors = [], onChunk, onComplete, onThinking = null, onSearchStart = null, onSearchResults = null, onProcessing = null, onArtifact = null, signal = null) {
+  async streamMessageWithFiles(message, files, sessionId, projectId, model = 'sonnet', webSearchEnabled = true, enabledConnectors = [], existingArtifacts = [], onChunk, onComplete, onThinking = null, onSearchStart = null, onSearchResults = null, onProcessing = null, onArtifact = null, onMemoryContext = null, onCompaction = null, signal = null) {
     // Convert files to base64 and send as JSON to Lambda Function URL for true streaming
     const url = STREAM_URL || `${API_URL}/api/chat/message/with-files/stream`
-    console.log('Streaming with files to URL:', url)
+    const isLambdaUrl = STREAM_URL && url.includes('lambda-url')
+    console.log('Streaming with files to URL:', url, isLambdaUrl ? '(Lambda Function URL - using Bearer auth)' : '(API Gateway - using cookies)')
 
     // Convert files to base64
     const filesData = await Promise.all(files.map(async (file) => {
@@ -163,9 +191,11 @@ export const chatService = {
       }
     }))
 
-    const response = await fetch(url, {
+    // Use Bearer auth for Lambda Function URL (cross-domain), cookies for API Gateway
+    const fetchOptions = isLambdaUrl ? fetchWithAuthHeader : fetchWithCredentials
+    const response = await fetch(url, fetchOptions({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message,
         session_id: sessionId,
@@ -174,12 +204,13 @@ export const chatService = {
         web_search_enabled: webSearchEnabled,
         extended_thinking_enabled: false,
         enabled_connectors: enabledConnectors,
+        existing_artifacts: existingArtifacts.map(a => ({ id: a.id, title: a.title || a.name, type: a.type })),
         files: filesData
       }),
       signal
-    })
+    }))
     if (!response.ok) throw new Error('Failed to send message with files')
-    await this._processStream(response, onChunk, onComplete, onThinking, onSearchStart, onSearchResults, onProcessing, onArtifact)
+    await this._processStream(response, onChunk, onComplete, onThinking, onSearchStart, onSearchResults, onProcessing, onArtifact, null, onMemoryContext, onCompaction)
   },
 
   _fileToBase64(file) {
@@ -195,7 +226,7 @@ export const chatService = {
     })
   },
 
-  async _processStream(response, onChunk, onComplete, onThinking = null, onSearchStart = null, onSearchResults = null, onProcessing = null, onArtifact = null, onKnowledgeContext = null) {
+  async _processStream(response, onChunk, onComplete, onThinking = null, onSearchStart = null, onSearchResults = null, onProcessing = null, onArtifact = null, onKnowledgeContext = null, onMemoryContext = null, onCompaction = null) {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -216,6 +247,7 @@ export const chatService = {
             else if (data.type === 'processing' && onProcessing) onProcessing(data.message)
             else if (data.type === 'processing_done' && onProcessing) onProcessing(null) // Signal processing complete
             else if (data.type === 'knowledge_context' && onKnowledgeContext) onKnowledgeContext(data.context)
+            else if (data.type === 'memory_context' && onMemoryContext) onMemoryContext(data)
             else if (data.type === 'search_start' && onSearchStart) onSearchStart(data.query)
             else if (data.type === 'search_results' && onSearchResults) {
               // Parse results if they're a string (JSON from backend)
@@ -238,6 +270,9 @@ export const chatService = {
             }
             else if (data.type === 'artifact_complete' && onArtifact) {
               onArtifact({ event: 'complete', artifact: data.artifact || data })
+            }
+            else if (data.type === 'compaction' && onCompaction) {
+              onCompaction(data)
             }
             else if (data.type === 'done') onComplete(data)
             else if (data.type === 'error') console.error('Stream error:', data.message)
@@ -266,7 +301,7 @@ export const chatService = {
   },
 
   async getAvailableConnectors() {
-    const response = await fetch(`${API_URL}/api/connectors/available`, { headers: getUserIdHeader() })
+    const response = await fetch(`${API_URL}/api/connectors/available`, fetchWithCredentials())
     if (!response.ok) throw new Error('Failed to get connectors')
     const data = await response.json()
     return data.connectors
@@ -275,74 +310,74 @@ export const chatService = {
 
 export const sessionsService = {
   async list() {
-    const res = await fetch(`${API_URL}/api/sessions`, { headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/sessions`, fetchWithCredentials())
     if (!res.ok) throw new Error('Failed to list sessions')
     return (await res.json()).sessions
   },
   async create(data = {}) {
     const res = await fetch(`${API_URL}/api/sessions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify(data)
     })
     if (!res.ok) throw new Error('Failed to create session')
     return res.json()
   },
   async getMessages(sessionId) {
-    const res = await fetch(`${API_URL}/api/sessions/${sessionId}/messages`, { headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/sessions/${sessionId}/messages`, fetchWithCredentials())
     if (!res.ok) throw new Error('Failed to get messages')
     return (await res.json()).messages
   },
   async update(sessionId, updates) {
-    const res = await fetch(`${API_URL}/api/sessions/${sessionId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...getUserIdHeader() }, body: JSON.stringify(updates) })
+    const res = await fetch(`${API_URL}/api/sessions/${sessionId}`, fetchWithCredentials({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }))
     if (!res.ok) throw new Error('Failed to update session')
     return res.json()
   },
   async delete(sessionId) {
-    const res = await fetch(`${API_URL}/api/sessions/${sessionId}`, { method: 'DELETE', headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/sessions/${sessionId}`, fetchWithCredentials({ method: 'DELETE' }))
     if (!res.ok) throw new Error('Failed to delete session')
   }
 }
 
 export const projectsService = {
   async list(status = 'active') {
-    const res = await fetch(`${API_URL}/api/projects?status=${status}`, { headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/projects?status=${status}`, fetchWithCredentials())
     if (!res.ok) throw new Error('Failed to list projects')
     return (await res.json()).projects
   },
 
   async get(projectId) {
-    const res = await fetch(`${API_URL}/api/projects/${projectId}`, { headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/projects/${projectId}`, fetchWithCredentials())
     if (!res.ok) throw new Error('Failed to get project')
     return res.json()
   },
 
   async create(project) {
-    const res = await fetch(`${API_URL}/api/projects`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getUserIdHeader() }, body: JSON.stringify(project) })
+    const res = await fetch(`${API_URL}/api/projects`, fetchWithCredentials({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(project) }))
     if (!res.ok) throw new Error('Failed to create project')
     return res.json()
   },
 
   async update(projectId, updates) {
-    const res = await fetch(`${API_URL}/api/projects/${projectId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...getUserIdHeader() }, body: JSON.stringify(updates) })
+    const res = await fetch(`${API_URL}/api/projects/${projectId}`, fetchWithCredentials({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }))
     if (!res.ok) throw new Error('Failed to update project')
     return res.json()
   },
 
   async delete(projectId) {
-    const res = await fetch(`${API_URL}/api/projects/${projectId}`, { method: 'DELETE', headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/projects/${projectId}`, fetchWithCredentials({ method: 'DELETE' }))
     if (!res.ok) throw new Error('Failed to delete project')
   },
 
   // File management
   async listFiles(projectId) {
-    const res = await fetch(`${API_URL}/api/projects/${projectId}/files`, { headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/files`, fetchWithCredentials())
     if (!res.ok) throw new Error('Failed to list files')
     return (await res.json()).files
   },
 
   async getFile(projectId, fileId) {
-    const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}`, { headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}`, fetchWithCredentials())
     if (!res.ok) throw new Error('Failed to get file')
     return res.json()
   },
@@ -355,7 +390,7 @@ export const projectsService = {
 
     const presignRes = await fetch(`${API_URL}/api/projects/${projectId}/files`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size, pinned })
     })
     if (!presignRes.ok) throw new Error('Failed to get upload URL')
@@ -375,7 +410,7 @@ export const projectsService = {
 
     const res = await fetch(`${API_URL}/api/projects/${projectId}/files/upload-zip`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({
         filename: file.name,
         zipContent: base64,
@@ -394,7 +429,7 @@ export const projectsService = {
   async updateFile(projectId, fileId, updates) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify(updates)
     })
     if (!res.ok) throw new Error('Failed to update file')
@@ -404,7 +439,7 @@ export const projectsService = {
   async toggleFilePin(projectId, fileId, pinned) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}/pin`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ pinned })
     })
     if (!res.ok) throw new Error('Failed to toggle file pin')
@@ -412,13 +447,25 @@ export const projectsService = {
   },
 
   async deleteFile(projectId, fileId) {
-    const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}`, { method: 'DELETE', headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}`, fetchWithCredentials({ method: 'DELETE' }))
     if (!res.ok) throw new Error('Failed to delete file')
+  },
+
+  // Save artifact as project file
+  async saveArtifactToProject(projectId, { filename, content, artifactId, artifactTitle, pinned = false }) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/files/from-artifact`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ filename, content, artifactId, artifactTitle, pinned })
+    })
+    if (!res.ok) throw new Error('Failed to save artifact to project')
+    return res.json()
   },
 
   // Memory management
   async getMemory(projectId) {
-    const res = await fetch(`${API_URL}/api/projects/${projectId}/memory`, { headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/memory`, fetchWithCredentials())
     if (!res.ok) throw new Error('Failed to get project memory')
     return res.json()
   },
@@ -426,7 +473,7 @@ export const projectsService = {
   async updateMemory(projectId, sections) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/memory`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ sections })
     })
     if (!res.ok) throw new Error('Failed to update project memory')
@@ -436,57 +483,122 @@ export const projectsService = {
   async regenerateMemory(projectId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/memory/regenerate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() }
+      headers: { 'Content-Type': 'application/json' }, credentials: 'include'
     })
     if (!res.ok) throw new Error('Failed to regenerate project memory')
     return res.json()
   },
 
+  // Semantic Memories (S3 Vectors)
+  async listSemanticMemories(projectId, query = null) {
+    const params = query ? `?query=${encodeURIComponent(query)}` : ''
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/memories${params}`, fetchWithCredentials())
+    if (!res.ok) throw new Error('Failed to list semantic memories')
+    return res.json()
+  },
+
+  async addSemanticMemory(projectId, content, category = 'general') {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/memories`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ content, category })
+    })
+    if (!res.ok) throw new Error('Failed to add semantic memory')
+    return res.json()
+  },
+
+  async updateSemanticMemory(projectId, memoryId, content, category = 'general') {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/memories/${memoryId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ content, category })
+    })
+    if (!res.ok) throw new Error('Failed to update semantic memory')
+    return res.json()
+  },
+
+  async deleteSemanticMemory(projectId, memoryId) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/memories/${memoryId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    })
+    if (!res.ok) throw new Error('Failed to delete semantic memory')
+  },
+
   // Chats/sessions within a project
   async listChats(projectId) {
-    const res = await fetch(`${API_URL}/api/projects/${projectId}/chats`, { headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/chats`, fetchWithCredentials())
     if (!res.ok) throw new Error('Failed to list project chats')
     return (await res.json()).chats
+  },
+
+  async deleteChat(projectId, chatId) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/chats/${chatId}`, fetchWithCredentials({ method: 'DELETE' }))
+    if (!res.ok) throw new Error('Failed to delete chat')
   }
 }
 
 export const artifactsService = {
   async listForSession(sessionId) {
-    const res = await fetch(`${API_URL}/api/sessions/${sessionId}/artifacts`, { headers: getUserIdHeader() })
-    if (!res.ok) throw new Error('Failed to list artifacts')
-    return (await res.json()).artifacts
+    console.log('[artifactsService] Fetching artifacts for session:', sessionId)
+    const res = await fetch(`${API_URL}/api/sessions/${sessionId}/artifacts`, fetchWithCredentials())
+    if (!res.ok) {
+      console.error('[artifactsService] Failed to list artifacts:', res.status, res.statusText)
+      throw new Error('Failed to list artifacts')
+    }
+    const data = await res.json()
+    console.log('[artifactsService] Got', data.artifacts?.length || 0, 'artifacts for session')
+    return data.artifacts
+  },
+  async listAll() {
+    console.log('[artifactsService] Fetching all artifacts')
+    const res = await fetch(`${API_URL}/api/artifacts`, fetchWithCredentials())
+    if (!res.ok) {
+      console.error('[artifactsService] Failed to list all artifacts:', res.status, res.statusText)
+      throw new Error('Failed to list all artifacts')
+    }
+    const data = await res.json()
+    console.log('[artifactsService] Got', data.artifacts?.length || 0, 'total artifacts')
+    return data.artifacts
+  },
+  async getContent(sessionId, artifactId) {
+    const res = await fetch(`${API_URL}/api/artifacts/${artifactId}/content?sessionId=${sessionId}`, fetchWithCredentials())
+    if (!res.ok) throw new Error('Failed to get artifact content')
+    return (await res.text())
   }
 }
 
 export const mcpService = {
   async list() {
-    const res = await fetch(`${API_URL}/api/mcp/servers`, { headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/mcp/servers`, fetchWithCredentials())
     if (!res.ok) throw new Error('Failed to list MCP servers')
     return (await res.json()).servers
   },
   async create(server) {
-    const res = await fetch(`${API_URL}/api/mcp/servers`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getUserIdHeader() }, body: JSON.stringify(server) })
+    const res = await fetch(`${API_URL}/api/mcp/servers`, fetchWithCredentials({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(server) }))
     if (!res.ok) throw new Error('Failed to create MCP server')
     return res.json()
   },
   async update(serverId, updates) {
-    const res = await fetch(`${API_URL}/api/mcp/servers/${serverId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...getUserIdHeader() }, body: JSON.stringify(updates) })
+    const res = await fetch(`${API_URL}/api/mcp/servers/${serverId}`, fetchWithCredentials({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }))
     if (!res.ok) throw new Error('Failed to update MCP server')
     return res.json()
   },
   async delete(serverId) {
-    const res = await fetch(`${API_URL}/api/mcp/servers/${serverId}`, { method: 'DELETE', headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/mcp/servers/${serverId}`, fetchWithCredentials({ method: 'DELETE' }))
     if (!res.ok) throw new Error('Failed to delete MCP server')
   },
   async getTools() {
-    const res = await fetch(`${API_URL}/api/mcp/tools`, { headers: getUserIdHeader() })
+    const res = await fetch(`${API_URL}/api/mcp/tools`, fetchWithCredentials())
     if (!res.ok) throw new Error('Failed to get MCP tools')
     return res.json()
   },
   async executeTool(tool, args, serverId = null) {
     const res = await fetch(`${API_URL}/api/mcp/execute`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getUserIdHeader() },
+      headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ tool, arguments: args, server_id: serverId })
     })
     if (!res.ok) throw new Error('Failed to execute MCP tool')

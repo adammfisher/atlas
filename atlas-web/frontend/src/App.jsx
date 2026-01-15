@@ -6,26 +6,46 @@ import InsightsBubble from './components/InsightsBubble/InsightsBubble'
 import ArtifactsPanel from './components/Artifacts/ArtifactsPanel'
 import ProjectDetailView from './components/Project/ProjectDetailView'
 import ProjectsListPage from './components/Project/ProjectsListPage'
+import ArtifactsListPage from './components/Artifacts/ArtifactsListPage'
 import { useChatStore } from './hooks/useChatStore'
 import { insightsService } from './services/insightsService'
 import { useInsightsStore } from './hooks/useInsightsStore'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import LoginPage from './components/Auth/LoginPage'
 
 // Wrapper component that can access route params and manage artifacts
-function ChatWithArtifacts({ showArtifacts, toggleArtifacts, localArtifacts, setLocalArtifacts, selectedArtifact, setSelectedArtifact, streamingArtifact, setStreamingArtifact, setShowArtifactsDirectly, fontFamily }) {
-  const { sessionId } = useParams()
+function ChatWithArtifacts({ showArtifacts, toggleArtifacts, localArtifacts, setLocalArtifacts, selectedArtifact, setSelectedArtifact, streamingArtifact, setStreamingArtifact, setShowArtifactsDirectly, fontFamily, onFileSavedToProject }) {
+  const { sessionId, projectId } = useParams()
   const fetchInsights = useInsightsStore(state => state.fetchInsights)
 
   const handleArtifactCreated = useCallback((artifact) => {
-    console.log('Artifact created:', artifact)
-    // Add to local artifacts (for frontend-detected artifacts)
+    console.log('[App] handleArtifactCreated called:', artifact.id, 'title:', artifact.title, 'content length:', artifact.content?.length)
+    // Add or update local artifacts using stable ID matching
     setLocalArtifacts(prev => {
-      // Avoid duplicates
-      if (prev.find(a => a.id === artifact.id)) return prev
+      const existingIndex = prev.findIndex(a => a.id === artifact.id)
+      if (existingIndex >= 0) {
+        // Update existing artifact - increment version
+        const existing = prev[existingIndex]
+        const updated = {
+          ...artifact,
+          version: (existing.version || 1) + 1,
+          created_at: existing.created_at,
+          updated_at: new Date().toISOString()
+        }
+        console.log('[App] Updating existing artifact:', artifact.id, 'to version:', updated.version)
+        const newList = [...prev]
+        newList[existingIndex] = updated
+        return newList
+      }
+      // Add new artifact
+      console.log('[App] Adding new artifact:', artifact.id)
       return [...prev, artifact]
     })
     // Clear streaming artifact when complete
+    console.log('[App] Clearing streamingArtifact (setting to null)')
     setStreamingArtifact(null)
     // Set as selected so it stays in view
+    console.log('[App] Setting selectedArtifact to:', artifact.id)
     setSelectedArtifact(artifact)
 
     // Send artifact to Insights API for potential sharing to Knowledge Core
@@ -86,16 +106,49 @@ function ChatWithArtifacts({ showArtifacts, toggleArtifacts, localArtifacts, set
   const prevArtifactCountRef = React.useRef(0)
 
   // Handler for when artifacts are detected in loaded messages
-  // This replaces the entire list (not appends) since ChatView re-parses all messages
+  // Uses stable IDs to properly merge/update artifacts
   const handleArtifactsDetected = useCallback((detectedArtifacts) => {
     console.log('Detected artifacts in messages:', detectedArtifacts.length)
+
+    // Merge detected artifacts with existing ones using stable IDs
+    setLocalArtifacts(prev => {
+      const artifactMap = new Map()
+
+      // First, add all existing artifacts to the map
+      prev.forEach(a => artifactMap.set(a.id, a))
+
+      // Then, update or add detected artifacts
+      // Artifacts with same ID should be updated (keeping the latest version)
+      let hasChanges = false
+      detectedArtifacts.forEach(detected => {
+        const existing = artifactMap.get(detected.id)
+        if (existing) {
+          // Update if content changed (new version)
+          if (existing.content !== detected.content) {
+            artifactMap.set(detected.id, {
+              ...detected,
+              version: (existing.version || 1) + 1,
+              created_at: existing.created_at,
+              updated_at: new Date().toISOString()
+            })
+            hasChanges = true
+            console.log('Artifact updated:', detected.title, 'to version:', (existing.version || 1) + 1)
+          }
+        } else {
+          // New artifact
+          artifactMap.set(detected.id, detected)
+          hasChanges = true
+        }
+      })
+
+      // Convert map back to array, maintaining order
+      const result = Array.from(artifactMap.values())
+      return result
+    })
 
     // Check if there are NEW artifacts (count increased)
     const hasNewArtifacts = detectedArtifacts.length > prevArtifactCountRef.current
     prevArtifactCountRef.current = detectedArtifacts.length
-
-    // Replace artifacts list with the detected ones (deduplicated by id)
-    setLocalArtifacts(detectedArtifacts)
 
     // Send NEW artifacts to insights API (only those not already sent)
     // Skip artifacts from Knowledge Core (they're already shared)
@@ -142,6 +195,7 @@ function ChatWithArtifacts({ showArtifacts, toggleArtifacts, localArtifacts, set
         <ChatView
           onToggleArtifacts={toggleArtifacts}
           artifactsCount={localArtifacts.length}
+          existingArtifacts={localArtifacts}
           onArtifactCreated={handleArtifactCreated}
           onOpenArtifactInPanel={handleOpenArtifactInPanel}
           onArtifactStreaming={handleArtifactStreaming}
@@ -151,6 +205,7 @@ function ChatWithArtifacts({ showArtifacts, toggleArtifacts, localArtifacts, set
       </div>
       <ArtifactsPanel
         sessionId={sessionId}
+        projectId={projectId}
         artifacts={localArtifacts}
         isVisible={showArtifacts}
         onClose={() => toggleArtifacts()}
@@ -158,6 +213,7 @@ function ChatWithArtifacts({ showArtifacts, toggleArtifacts, localArtifacts, set
         onSelectArtifact={setSelectedArtifact}
         streamingArtifact={streamingArtifact}
         fontFamily={fontFamily}
+        onFileSaved={onFileSavedToProject}
       />
     </div>
   )
@@ -171,7 +227,23 @@ const fontFamilies = {
   sans: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
 }
 
-function App() {
+// Loading spinner component
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-900">
+      <div className="text-center">
+        <svg className="animate-spin h-12 w-12 text-blue-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p className="text-gray-400">Loading...</p>
+      </div>
+    </div>
+  )
+}
+
+// Main authenticated app content
+function AuthenticatedApp() {
   // Use individual selectors for better reactivity
   const colorMode = useChatStore(state => state.colorMode)
   const currentSessionId = useChatStore(state => state.currentSessionId)
@@ -226,17 +298,16 @@ function App() {
   }, [colorMode])
 
   return (
-    <BrowserRouter>
-      <div
-        className="flex h-screen overflow-x-hidden transition-colors duration-200"
-        style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-      >
-        {/* Sidebar */}
-        <Sidebar />
+    <div
+      className="flex h-screen overflow-x-hidden transition-colors duration-200"
+      style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+    >
+      {/* Sidebar */}
+      <Sidebar />
 
-        {/* Main content area - smooth transition when artifacts panel opens */}
-        <main className="flex-1 flex overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]">
-          <Routes>
+      {/* Main content area - smooth transition when artifacts panel opens */}
+      <main className="flex-1 flex overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]">
+        <Routes>
             <Route
               path="/"
               element={
@@ -274,6 +345,10 @@ function App() {
             <Route
               path="/projects"
               element={<ProjectsListPage />}
+            />
+            <Route
+              path="/artifacts"
+              element={<ArtifactsListPage />}
             />
             <Route
               path="/projects/:projectId"
@@ -323,7 +398,32 @@ function App() {
         {/* Insights Bubble - always present at bottom */}
         <InsightsBubble />
       </div>
-    </BrowserRouter>
+  )
+}
+
+// App wrapper with auth check
+function AppContent() {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return <LoadingScreen />
+  }
+
+  if (!user) {
+    return <LoginPage />
+  }
+
+  return <AuthenticatedApp />
+}
+
+// Root App component with providers
+function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
+    </AuthProvider>
   )
 }
 

@@ -10,17 +10,34 @@ const {
   success,
   badRequest,
   serverError,
-  getUserId,
   parseBody,
   sseHeaders,
   sseEvent
 } = require('./shared/response');
+const { authenticateRequest, authErrorResponse } = require('./shared/authMiddleware');
 const { processFilesWithZipExtraction, isZipFile } = require('./shared/zip');
 const { BedrockRuntimeClient, ConverseCommand } = require('@aws-sdk/client-bedrock-runtime');
 
+// Vector memory imports (lazy loaded to handle graceful fallback)
+let vectorsModule = null;
+function getVectorsModule() {
+  if (!vectorsModule) {
+    try {
+      vectorsModule = require('./shared/vectors');
+    } catch (err) {
+      console.warn('[Vectors] Module not available:', err.message);
+      vectorsModule = {
+        searchMemories: async () => [],
+        searchConversations: async () => []
+      };
+    }
+  }
+  return vectorsModule;
+}
+
 // Bedrock client for memory generation
 const bedrockClient = new BedrockRuntimeClient({ region: 'us-east-1' });
-const MEMORY_MODEL = 'us.anthropic.claude-3-5-haiku-20241022-v1:0';
+const MEMORY_MODEL = 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
 
 const SESSIONS_TABLE = process.env.SESSIONS_TABLE;
 const MESSAGES_TABLE = process.env.MESSAGES_TABLE;
@@ -31,11 +48,13 @@ const ARTIFACTS_TABLE = process.env.ARTIFACTS_TABLE;
 const SUMMARIES_TABLE = process.env.SUMMARIES_TABLE;
 const UPLOADS_BUCKET = process.env.UPLOADS_BUCKET;
 const ARTIFACTS_BUCKET = process.env.ARTIFACTS_BUCKET;
+const VECTORS_BUCKET = process.env.VECTORS_BUCKET;
 
 // Token budget constants for context assembly
 const CONTEXT_BUDGET = {
   total: 200000,
-  memory: 15000,        // ~15K tokens for synthesized memory
+  memory: 15000,        // ~15K tokens for synthesized memory (legacy DynamoDB)
+  semanticMemory: 10000, // ~10K tokens for semantic vector memories
   pinnedFiles: 50000,   // ~50K for pinned file contents
   fileManifest: 2000,   // ~2K for file list/manifest
   systemPrompt: 5000,   // ~5K for system instructions
@@ -48,15 +67,23 @@ const CONTEXT_BUDGET = {
 exports.handler = async (event, context) => {
   console.log('Chat event:', JSON.stringify(event));
 
+  // Authenticate request
+  let user;
+  try {
+    user = authenticateRequest(event);
+  } catch (error) {
+    return authErrorResponse(error);
+  }
+
   const method = event.requestContext?.http?.method || event.httpMethod;
   const path = event.requestContext?.http?.path || event.path;
 
   try {
     // Route to appropriate handler
     if (path.endsWith('/stream') || path.includes('/with-files')) {
-      return handleStreamingChat(event);
+      return handleStreamingChat(user.userId, event);
     } else if (method === 'POST' && path.endsWith('/message')) {
-      return handleChat(event);
+      return handleChat(user.userId, event);
     }
 
     return badRequest('Invalid route');
@@ -75,6 +102,26 @@ exports.streamHandler = awslambda.streamifyResponse(
   async (event, responseStream, context) => {
     console.log('Stream handler event:', JSON.stringify(event));
 
+    // Authenticate request
+    let user;
+    try {
+      user = authenticateRequest(event);
+    } catch (error) {
+      // Set up error response metadata
+      const metadata = {
+        statusCode: error.statusCode || 401,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Credentials': 'true'
+        }
+      };
+      responseStream = awslambda.HttpResponseStream.from(responseStream, metadata);
+      responseStream.write(JSON.stringify({ error: error.message }));
+      responseStream.end();
+      return;
+    }
+
     // Set up the response metadata for streaming
     // Note: Don't add CORS headers here - Lambda Function URL handles them
     const metadata = {
@@ -90,7 +137,7 @@ exports.streamHandler = awslambda.streamifyResponse(
     responseStream = awslambda.HttpResponseStream.from(responseStream, metadata);
 
     try {
-      await handleStreamingChatWithStream(event, responseStream);
+      await handleStreamingChatWithStream(user.userId, event, responseStream);
     } catch (error) {
       console.error('Streaming error:', error);
       responseStream.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
@@ -103,24 +150,48 @@ exports.streamHandler = awslambda.streamifyResponse(
 /**
  * Handle streaming chat with direct stream writing (for Lambda Response Streaming)
  */
-async function handleStreamingChatWithStream(event, responseStream) {
-  const userId = getUserId(event);
+async function handleStreamingChatWithStream(userId, event, responseStream) {
   const body = parseBody(event);
 
   const {
     message,
     session_id: sessionId,
     project_id: projectId,
-    model = 'sonnet',
+    model = 'haiku',
     web_search_enabled: webSearchEnabled = true,
     extended_thinking_enabled: extendedThinkingEnabled = false,
     enabled_connectors: enabledConnectors = [],
+    existing_artifacts: existingArtifacts = [],
     files = []
   } = body;
 
   if (!message && files.length === 0) {
     responseStream.write(`data: ${JSON.stringify({ type: 'error', message: 'Message or files required' })}\n\n`);
     return;
+  }
+
+  // Validate file sizes - Bedrock has ~4.5MB limit per document
+  const MAX_FILE_SIZE_MB = 4.5;
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+  for (const file of files) {
+    if (file.base64) {
+      // Calculate actual file size from base64 (base64 is ~33% larger than original)
+      const fileSizeBytes = (file.base64.length * 3) / 4;
+      if (fileSizeBytes > MAX_FILE_SIZE_BYTES) {
+        const fileSizeMB = (fileSizeBytes / (1024 * 1024)).toFixed(1);
+        responseStream.write(`data: ${JSON.stringify({
+          type: 'error',
+          message: `File "${file.name}" is too large (${fileSizeMB}MB). Maximum file size is ${MAX_FILE_SIZE_MB}MB for PDF documents. Try splitting the PDF or uploading a smaller file.`
+        })}\n\n`);
+        return;
+      }
+    }
+  }
+
+  // Debug: log existing artifacts passed from frontend
+  console.log('[ExistingArtifacts] Received from frontend:', existingArtifacts?.length || 0, 'artifacts');
+  if (existingArtifacts && existingArtifacts.length > 0) {
+    existingArtifacts.forEach(a => console.log(`  - "${a.title}" (type: ${a.type}, id: ${a.id})`));
   }
 
   // Get or create session
@@ -176,8 +247,24 @@ async function handleStreamingChatWithStream(event, responseStream) {
   let projectContext = null;
   console.log('[ProjectContext] Checking:', { sessionProjectId: session.projectId, requestProjectId: projectId, effectiveProjectId });
   if (effectiveProjectId) {
-    projectContext = await getProjectContext(userId, effectiveProjectId);
+    // Pass the user's message for semantic memory search
+    projectContext = await getProjectContext(userId, effectiveProjectId, message);
     console.log('[ProjectContext] Result:', projectContext ? `Found: ${projectContext.project?.name}` : 'NOT FOUND');
+
+    // Send memory context event if semantic memories were retrieved
+    if (projectContext && projectContext.stats) {
+      const { semanticMemoryCount, relevantConversationsCount } = projectContext.stats;
+      if (semanticMemoryCount > 0 || relevantConversationsCount > 0) {
+        responseStream.write(`data: ${JSON.stringify({
+          type: 'memory_context',
+          semanticMemoryCount,
+          relevantConversationsCount,
+          projectName: projectContext.project?.name,
+          memories: projectContext.rawSemanticMemories || [],
+          conversations: projectContext.rawConversations || []
+        })}\n\n`);
+      }
+    }
   } else {
     console.log('[ProjectContext] No projectId, skipping');
   }
@@ -208,10 +295,22 @@ async function handleStreamingChatWithStream(event, responseStream) {
     if (compacted.stats) {
       console.log(`[Compaction] Original: ${compacted.stats.originalTokens} tokens, After: ${compacted.stats.recentTokens} tokens, Summarized: ${compacted.stats.summarizedMessages} messages`);
     }
+
+    // Notify user that conversation was compacted
+    responseStream.write(`data: ${JSON.stringify({
+      type: 'compaction',
+      stats: {
+        originalTokens: compacted.stats?.originalTokens || 0,
+        recentTokens: compacted.stats?.recentTokens || 0,
+        summarizedMessages: compacted.stats?.summarizedMessages || 0,
+        preservedMessages: compacted.recentMessages?.length || 0
+      },
+      message: `Conversation compacted: ${compacted.stats?.summarizedMessages || 0} older messages summarized to maintain context quality.`
+    })}\n\n`);
   }
 
   // Build system prompt and messages
-  const systemPrompt = buildSystemPrompt(projectContext, webSearchEnabled);
+  const systemPrompt = buildSystemPrompt(projectContext, webSearchEnabled, existingArtifacts);
 
   // Process files, extracting any zip files
   let processedFiles = files;
@@ -248,12 +347,30 @@ async function handleStreamingChatWithStream(event, responseStream) {
     mediaType: f.type,
     base64: f.base64
   }));
+
+  // Filter out history messages with empty content before building messages
+  // IMPORTANT: Keep user messages even if empty to maintain conversation structure
+  // (user may have sent files without text - Bedrock requires user message first)
+  const filteredHistory = recentHistory
+    .map(m => ({ role: m.role, content: m.content }))
+    .filter(m => m.role === 'user' || (m.content && m.content.trim()));
+
+  console.log('[BuildMessages] History:', filteredHistory.length, 'messages');
+  console.log('[BuildMessages] Current message text:', message ? message.substring(0, 100) : '(empty)');
+  console.log('[BuildMessages] Files:', messageFiles.length);
+
   const messages = buildMessages(
-    recentHistory.map(m => ({ role: m.role, content: m.content })),
+    filteredHistory,
     { text: message || '', files: messageFiles },
     projectContext,
     compactedContext
   );
+
+  console.log('[BuildMessages] Result:', messages.length, 'messages');
+  messages.forEach((m, i) => {
+    const contentTypes = m.content.map(c => Object.keys(c)[0]).join(', ');
+    console.log(`  [${i}] ${m.role}: ${contentTypes} (${m.content.length} blocks)`);
+  });
 
   // Save user message
   const userMessageId = `msg_${Date.now()}_user`;
@@ -281,8 +398,13 @@ async function handleStreamingChatWithStream(event, responseStream) {
 
   // Stream response directly to client
   let fullResponse = '';
+  let displayResponse = ''; // Text shown in chat (excludes artifact content)
   let thinkingContent = '';
   const artifacts = [];
+  let insideArtifact = false; // Track if we're inside an artifact tag
+  let currentArtifact = null; // Track the current artifact being built
+  let lastSentArtifactContentLength = 0; // Track how much artifact content we've sent
+  let lastArtifactEndPos = 0; // Track position after last completed artifact
 
   try {
     for await (const chunk of streamChatWithTools({
@@ -294,22 +416,89 @@ async function handleStreamingChatWithStream(event, responseStream) {
     })) {
       if (chunk.type === 'text') {
         fullResponse += chunk.content;
-        // Write directly to stream
-        responseStream.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk.content })}\n\n`);
 
-        // Check for artifact patterns
-        const detectedArtifact = detectArtifact(fullResponse);
-        if (detectedArtifact && !artifacts.find(a => a.pattern === detectedArtifact.pattern)) {
+        // Check for artifact start/end tags to filter content
+        let textToSend = chunk.content;
+
+        // Check if this chunk contains a NEW artifact tag start (after any previous artifacts)
+        if (!insideArtifact) {
+          // Only look for artifact tags AFTER the last completed artifact
+          const searchArea = fullResponse.substring(lastArtifactEndPos);
+          const artifactStartMatch = searchArea.match(/<artifact\s+type="[^"]+"\s+title="[^"]+"[^>]*>/);
+          if (artifactStartMatch) {
+            insideArtifact = true;
+            lastSentArtifactContentLength = 0;
+            // Find the position in the full response
+            const tagStartPos = lastArtifactEndPos + searchArea.indexOf('<artifact');
+            const beforeArtifact = fullResponse.substring(displayResponse.length, tagStartPos);
+            if (beforeArtifact) {
+              displayResponse += beforeArtifact;
+              responseStream.write(`data: ${JSON.stringify({ type: 'chunk', content: beforeArtifact })}\n\n`);
+            }
+            textToSend = null;
+          }
+        }
+
+        // Check if we're closing an artifact
+        if (insideArtifact && fullResponse.includes('</artifact>')) {
+          insideArtifact = false;
+          currentArtifact = null;
+          lastSentArtifactContentLength = 0;
+          const closeTagEnd = fullResponse.lastIndexOf('</artifact>') + '</artifact>'.length;
+          // Update the position marker so we don't re-detect this artifact
+          lastArtifactEndPos = closeTagEnd;
+          // Update displayResponse to track what we've "processed" (the artifact was filtered)
+          displayResponse = fullResponse.substring(0, closeTagEnd).replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/g, '');
+          // Send any text that came after the closing tag
+          const afterArtifact = fullResponse.substring(closeTagEnd);
+          if (afterArtifact) {
+            displayResponse += afterArtifact;
+            responseStream.write(`data: ${JSON.stringify({ type: 'chunk', content: afterArtifact })}\n\n`);
+          }
+          textToSend = null;
+        }
+
+        // Only send text if we're not inside an artifact
+        if (textToSend && !insideArtifact) {
+          displayResponse += textToSend;
+          responseStream.write(`data: ${JSON.stringify({ type: 'chunk', content: textToSend })}\n\n`);
+        }
+
+        // Check for artifact patterns and send start event
+        // Only look for NEW artifacts after the last completed one
+        const searchArea = fullResponse.substring(lastArtifactEndPos);
+        const detectedArtifact = detectArtifact(searchArea);
+        if (detectedArtifact && !artifacts.find(a => a.id === detectedArtifact.id)) {
           artifacts.push(detectedArtifact);
+          currentArtifact = detectedArtifact;
           responseStream.write(`data: ${JSON.stringify({
             type: 'artifact_start',
             artifact: {
               id: detectedArtifact.id,
               name: detectedArtifact.name,
+              title: detectedArtifact.title,
               type: detectedArtifact.type,
               status: 'generating'
             }
           })}\n\n`);
+        }
+
+        // Send artifact_delta events with current content while building
+        if (insideArtifact && currentArtifact) {
+          // Extract current artifact content (partial)
+          const partialContent = extractArtifactContent(fullResponse, currentArtifact);
+          if (partialContent && partialContent.content.length > lastSentArtifactContentLength) {
+            lastSentArtifactContentLength = partialContent.content.length;
+            responseStream.write(`data: ${JSON.stringify({
+              type: 'artifact_delta',
+              artifact: {
+                id: currentArtifact.id,
+                title: currentArtifact.title,
+                type: currentArtifact.type,
+                content: partialContent.content
+              }
+            })}\n\n`);
+          }
         }
       } else if (chunk.type === 'thinking') {
         thinkingContent += chunk.content;
@@ -338,25 +527,68 @@ async function handleStreamingChatWithStream(event, responseStream) {
     timestamp: Date.now()
   });
 
-  // Process and save artifacts
+  // Process and save artifacts (update existing or create new)
   for (const artifact of artifacts) {
     const extracted = extractArtifactContent(fullResponse, artifact);
     if (extracted) {
-      const s3Key = `${activeSessionId}/${artifact.id}-${artifact.name}`;
+      // Determine file extension from artifact name or type
+      const fileExtension = artifact.name.includes('.')
+        ? '.' + artifact.name.split('.').pop()
+        : '.' + artifact.type;
+      const s3Key = `${userId}/${activeSessionId}/${artifact.id}${fileExtension}`;
       await uploadContent(ARTIFACTS_BUCKET, s3Key, extracted.content, getContentType(artifact.name));
-      await putItem(ARTIFACTS_TABLE, {
-        sessionId: activeSessionId,
-        artifactId: artifact.id,
-        name: artifact.name,
-        type: artifact.type,
-        s3Key,
-        createdAt: Date.now()
-      });
+
+      // Check if artifact already exists (for updates)
+      const existingArtifact = await getItem(ARTIFACTS_TABLE, { sessionId: activeSessionId, artifactId: artifact.id });
+      const now = Date.now();
+
+      if (existingArtifact) {
+        // Update existing artifact - increment version
+        console.log(`[Artifacts] Updating existing artifact: ${artifact.id} to version ${(existingArtifact.version || 1) + 1}`);
+        await updateItem(ARTIFACTS_TABLE,
+          { sessionId: activeSessionId, artifactId: artifact.id },
+          {
+            title: artifact.title || artifact.name.replace(/\.[^.]+$/, ''),
+            name: artifact.name,
+            s3Key,
+            size: Buffer.byteLength(extracted.content, 'utf8'),
+            version: (existingArtifact.version || 1) + 1,
+            updatedAt: now
+          }
+        );
+      } else {
+        // Create new artifact
+        console.log(`[Artifacts] Creating new artifact: ${artifact.id}`);
+        await putItem(ARTIFACTS_TABLE, {
+          sessionId: activeSessionId,
+          artifactId: artifact.id,
+          userId: userId,
+          title: artifact.title || artifact.name.replace(/\.[^.]+$/, ''),
+          name: artifact.name,
+          type: artifact.type,
+          fileExtension: fileExtension,
+          contentType: getContentType(artifact.name),
+          renderable: ['.md', '.html', '.svg', '.mermaid', '.json', '.jsx', '.slides'].includes(fileExtension),
+          s3Key,
+          size: Buffer.byteLength(extracted.content, 'utf8'),
+          version: 1,
+          createdAt: now,
+          updatedAt: now
+        });
+      }
+
       responseStream.write(`data: ${JSON.stringify({
         type: 'artifact_complete',
         artifact_id: artifact.id,
-        name: artifact.name,
-        type: artifact.type
+        artifact: {
+          id: artifact.id,
+          name: artifact.name,
+          title: artifact.title || artifact.name.replace(/\.[^.]+$/, ''),
+          type: artifact.type,
+          file_extension: fileExtension,
+          content: extracted.content,
+          version: existingArtifact ? (existingArtifact.version || 1) + 1 : 1
+        }
       })}\n\n`);
     }
   }
@@ -387,23 +619,36 @@ async function handleStreamingChatWithStream(event, responseStream) {
 /**
  * Handle streaming chat (buffered response for API Gateway)
  */
-async function handleStreamingChat(event) {
-  const userId = getUserId(event);
+async function handleStreamingChat(userId, event) {
   const body = parseBody(event);
   
   const {
     message,
     session_id: sessionId,
     project_id: projectId,
-    model = 'sonnet',
+    model = 'haiku',
     web_search_enabled: webSearchEnabled = true,
     extended_thinking_enabled: extendedThinkingEnabled = false,
     enabled_connectors: enabledConnectors = [],
+    existing_artifacts: existingArtifacts = [],
     files = []
   } = body;
 
   if (!message && files.length === 0) {
     return badRequest('Message or files required');
+  }
+
+  // Validate file sizes - Bedrock has ~4.5MB limit per document
+  const MAX_FILE_SIZE_MB = 4.5;
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+  for (const file of files) {
+    if (file.base64) {
+      const fileSizeBytes = (file.base64.length * 3) / 4;
+      if (fileSizeBytes > MAX_FILE_SIZE_BYTES) {
+        const fileSizeMB = (fileSizeBytes / (1024 * 1024)).toFixed(1);
+        return badRequest(`File "${file.name}" is too large (${fileSizeMB}MB). Maximum file size is ${MAX_FILE_SIZE_MB}MB for PDF documents.`);
+      }
+    }
   }
 
   // Get or create session
@@ -448,10 +693,27 @@ async function handleStreamingChat(event) {
   // Use projectId from request if session doesn't have one (for new sessions)
   const effectiveProjectId = session.projectId || projectId;
   let projectContext = null;
+  let memoryContextEvent = null;
   console.log('[ProjectContext API GW] Checking:', { sessionProjectId: session.projectId, requestProjectId: projectId, effectiveProjectId });
   if (effectiveProjectId) {
-    projectContext = await getProjectContext(userId, effectiveProjectId);
+    // Pass the user's message for semantic memory search
+    projectContext = await getProjectContext(userId, effectiveProjectId, message);
     console.log('[ProjectContext API GW] Result:', projectContext ? `Found: ${projectContext.project?.name}` : 'NOT FOUND');
+
+    // Prepare memory context event if semantic memories were retrieved
+    if (projectContext && projectContext.stats) {
+      const { semanticMemoryCount, relevantConversationsCount } = projectContext.stats;
+      if (semanticMemoryCount > 0 || relevantConversationsCount > 0) {
+        memoryContextEvent = {
+          type: 'memory_context',
+          semanticMemoryCount,
+          relevantConversationsCount,
+          projectName: projectContext.project?.name,
+          memories: projectContext.rawSemanticMemories || [],
+          conversations: projectContext.rawConversations || []
+        };
+      }
+    }
   } else {
     console.log('[ProjectContext API GW] No projectId, skipping');
   }
@@ -484,8 +746,25 @@ async function handleStreamingChat(event) {
     }
   }
 
+  // Collect SSE events
+  const events = [];
+
+  // Notify user if conversation was compacted
+  if (compacted.compacted) {
+    events.push(sseEvent({
+      type: 'compaction',
+      stats: {
+        originalTokens: compacted.stats?.originalTokens || 0,
+        recentTokens: compacted.stats?.recentTokens || 0,
+        summarizedMessages: compacted.stats?.summarizedMessages || 0,
+        preservedMessages: compacted.recentMessages?.length || 0
+      },
+      message: `Conversation compacted: ${compacted.stats?.summarizedMessages || 0} older messages summarized to maintain context quality.`
+    }));
+  }
+
   // Build system prompt
-  const systemPrompt = buildSystemPrompt(projectContext, webSearchEnabled);
+  const systemPrompt = buildSystemPrompt(projectContext, webSearchEnabled, existingArtifacts);
 
   // Process files, extracting any zip files
   let processedFiles = files;
@@ -530,11 +809,18 @@ async function handleStreamingChat(event) {
 
   // Stream response
   let fullResponse = '';
+  let displayResponse = ''; // Text shown in chat (excludes artifact content)
   let thinkingContent = '';
   const artifacts = [];
+  let insideArtifact = false; // Track if we're inside an artifact tag
+  let currentArtifact = null; // Track the current artifact being built
+  let lastSentArtifactContentLength = 0; // Track how much artifact content we've sent
+  let lastArtifactEndPos = 0; // Track position after last completed artifact
 
-  // Collect SSE events
-  const events = [];
+  // Add memory context event if semantic memories were retrieved
+  if (memoryContextEvent) {
+    events.push(sseEvent(memoryContextEvent));
+  }
 
   // Add zip extraction info to events if applicable
   if (zipExtractionInfo && zipExtractionInfo.length > 0) {
@@ -544,7 +830,7 @@ async function handleStreamingChat(event) {
       }
     }
   }
-  
+
   try {
     for await (const chunk of streamChatWithTools({
       messages,
@@ -555,21 +841,88 @@ async function handleStreamingChat(event) {
     })) {
       if (chunk.type === 'text') {
         fullResponse += chunk.content;
-        events.push(sseEvent({ type: 'chunk', content: chunk.content }));
 
-        // Check for artifact patterns
-        const detectedArtifact = detectArtifact(fullResponse);
-        if (detectedArtifact && !artifacts.find(a => a.pattern === detectedArtifact.pattern)) {
+        // Filter out artifact content from display
+        let textToSend = chunk.content;
+
+        // Check if this chunk contains a NEW artifact tag start (after any previous artifacts)
+        if (!insideArtifact) {
+          // Only look for artifact tags AFTER the last completed artifact
+          const searchArea = fullResponse.substring(lastArtifactEndPos);
+          const artifactStartMatch = searchArea.match(/<artifact\s+type="[^"]+"\s+title="[^"]+"[^>]*>/);
+          if (artifactStartMatch) {
+            insideArtifact = true;
+            lastSentArtifactContentLength = 0;
+            // Find the position in the full response
+            const tagStartPos = lastArtifactEndPos + searchArea.indexOf('<artifact');
+            const beforeArtifact = fullResponse.substring(displayResponse.length, tagStartPos);
+            if (beforeArtifact) {
+              displayResponse += beforeArtifact;
+              events.push(sseEvent({ type: 'chunk', content: beforeArtifact }));
+            }
+            textToSend = null;
+          }
+        }
+
+        // Check if we're closing an artifact
+        if (insideArtifact && fullResponse.includes('</artifact>')) {
+          insideArtifact = false;
+          currentArtifact = null;
+          lastSentArtifactContentLength = 0;
+          const closeTagEnd = fullResponse.lastIndexOf('</artifact>') + '</artifact>'.length;
+          // Update the position marker so we don't re-detect this artifact
+          lastArtifactEndPos = closeTagEnd;
+          // Update displayResponse to track what we've "processed" (the artifact was filtered)
+          displayResponse = fullResponse.substring(0, closeTagEnd).replace(/<artifact[^>]*>[\s\S]*?<\/artifact>/g, '');
+          // Send any text that came after the closing tag
+          const afterArtifact = fullResponse.substring(closeTagEnd);
+          if (afterArtifact) {
+            displayResponse += afterArtifact;
+            events.push(sseEvent({ type: 'chunk', content: afterArtifact }));
+          }
+          textToSend = null;
+        }
+
+        // Only send text if we're not inside an artifact
+        if (textToSend && !insideArtifact) {
+          displayResponse += textToSend;
+          events.push(sseEvent({ type: 'chunk', content: textToSend }));
+        }
+
+        // Check for artifact patterns and send start event
+        // Only look for NEW artifacts after the last completed one
+        const searchArea = fullResponse.substring(lastArtifactEndPos);
+        const detectedArtifact = detectArtifact(searchArea);
+        if (detectedArtifact && !artifacts.find(a => a.id === detectedArtifact.id)) {
           artifacts.push(detectedArtifact);
+          currentArtifact = detectedArtifact;
           events.push(sseEvent({
             type: 'artifact_start',
             artifact: {
               id: detectedArtifact.id,
               name: detectedArtifact.name,
+              title: detectedArtifact.title,
               type: detectedArtifact.type,
               status: 'generating'
             }
           }));
+        }
+
+        // Send artifact_delta events with current content while building
+        if (insideArtifact && currentArtifact) {
+          const partialContent = extractArtifactContent(fullResponse, currentArtifact);
+          if (partialContent && partialContent.content.length > lastSentArtifactContentLength) {
+            lastSentArtifactContentLength = partialContent.content.length;
+            events.push(sseEvent({
+              type: 'artifact_delta',
+              artifact: {
+                id: currentArtifact.id,
+                title: currentArtifact.title,
+                type: currentArtifact.type,
+                content: partialContent.content
+              }
+            }));
+          }
         }
       } else if (chunk.type === 'thinking') {
         thinkingContent += chunk.content;
@@ -598,32 +951,73 @@ async function handleStreamingChat(event) {
     timestamp: Date.now()
   });
 
-  // Process and save artifacts
+  // Process and save artifacts (update existing or create new)
   for (const artifact of artifacts) {
     const extracted = extractArtifactContent(fullResponse, artifact);
     if (extracted) {
-      const s3Key = `${activeSessionId}/${artifact.id}-${artifact.name}`;
+      // Determine file extension from artifact name or type
+      const fileExtension = artifact.name.includes('.')
+        ? '.' + artifact.name.split('.').pop()
+        : '.' + artifact.type;
+      const s3Key = `${userId}/${activeSessionId}/${artifact.id}${fileExtension}`;
       await uploadContent(
         ARTIFACTS_BUCKET,
         s3Key,
         extracted.content,
         getContentType(artifact.name)
       );
-      
-      await putItem(ARTIFACTS_TABLE, {
-        sessionId: activeSessionId,
-        artifactId: artifact.id,
-        name: artifact.name,
-        type: artifact.type,
-        s3Key,
-        createdAt: Date.now()
-      });
-      
+
+      // Check if artifact already exists (for updates)
+      const existingArtifact = await getItem(ARTIFACTS_TABLE, { sessionId: activeSessionId, artifactId: artifact.id });
+      const now = Date.now();
+
+      if (existingArtifact) {
+        // Update existing artifact - increment version
+        console.log(`[Artifacts] Updating existing artifact: ${artifact.id} to version ${(existingArtifact.version || 1) + 1}`);
+        await updateItem(ARTIFACTS_TABLE,
+          { sessionId: activeSessionId, artifactId: artifact.id },
+          {
+            title: artifact.title || artifact.name.replace(/\.[^.]+$/, ''),
+            name: artifact.name,
+            s3Key,
+            size: Buffer.byteLength(extracted.content, 'utf8'),
+            version: (existingArtifact.version || 1) + 1,
+            updatedAt: now
+          }
+        );
+      } else {
+        // Create new artifact
+        console.log(`[Artifacts] Creating new artifact: ${artifact.id}`);
+        await putItem(ARTIFACTS_TABLE, {
+          sessionId: activeSessionId,
+          artifactId: artifact.id,
+          userId: userId,
+          title: artifact.title || artifact.name.replace(/\.[^.]+$/, ''),
+          name: artifact.name,
+          type: artifact.type,
+          fileExtension: fileExtension,
+          contentType: getContentType(artifact.name),
+          renderable: ['.md', '.html', '.svg', '.mermaid', '.json', '.jsx', '.slides'].includes(fileExtension),
+          s3Key,
+          size: Buffer.byteLength(extracted.content, 'utf8'),
+          version: 1,
+          createdAt: now,
+          updatedAt: now
+        });
+      }
+
       events.push(sseEvent({
         type: 'artifact_complete',
         artifact_id: artifact.id,
-        name: artifact.name,
-        type: artifact.type
+        artifact: {
+          id: artifact.id,
+          name: artifact.name,
+          title: artifact.title || artifact.name.replace(/\.[^.]+$/, ''),
+          type: artifact.type,
+          file_extension: fileExtension,
+          content: extracted.content,
+          version: existingArtifact ? (existingArtifact.version || 1) + 1 : 1
+        }
       }));
     }
   }
@@ -662,9 +1056,8 @@ async function handleStreamingChat(event) {
 /**
  * Handle non-streaming chat
  */
-async function handleChat(event) {
+async function handleChat(userId, event) {
   // Similar to streaming but returns JSON
-  const userId = getUserId(event);
   const body = parseBody(event);
   
   // ... implementation similar to streaming but collects full response
@@ -686,8 +1079,11 @@ function estimateTokens(text) {
 /**
  * Get project context with memory, pinned files, and file manifest
  * Assembled within token budget constraints
+ * @param {string} userId - User ID
+ * @param {string} projectId - Project ID
+ * @param {string} query - Optional query for semantic memory search
  */
-async function getProjectContext(userId, projectId) {
+async function getProjectContext(userId, projectId, query = null) {
   const project = await getItem(PROJECTS_TABLE, { userId, projectId });
   if (!project) return null;
 
@@ -697,7 +1093,7 @@ async function getProjectContext(userId, projectId) {
     values: { ':projectId': projectId }
   });
 
-  // Get current project memory (latest version)
+  // Get current project memory (latest version) - legacy DynamoDB memory
   let memory = null;
   try {
     const memoryItems = await queryItems(PROJECT_MEMORY_TABLE, {
@@ -711,6 +1107,32 @@ async function getProjectContext(userId, projectId) {
     }
   } catch (e) {
     console.error('Failed to load project memory:', e);
+  }
+
+  // Search for relevant semantic memories if query is provided and vectors bucket is configured
+  let semanticMemories = [];
+  let semanticConversations = [];
+  if (query && VECTORS_BUCKET) {
+    try {
+      const vectors = getVectorsModule();
+
+      // Search for relevant facts/memories
+      const memoryResults = await vectors.searchMemories(userId, projectId, query, {
+        topK: 15,
+        minConfidence: 0.5
+      });
+      semanticMemories = memoryResults;
+      console.log(`[Vectors] Found ${memoryResults.length} relevant memories for query`);
+
+      // Search for relevant conversation history
+      const conversationResults = await vectors.searchConversations(userId, projectId, query, {
+        topK: 5
+      });
+      semanticConversations = conversationResults;
+      console.log(`[Vectors] Found ${conversationResults.length} relevant conversations for query`);
+    } catch (err) {
+      console.warn('[Vectors] Semantic search failed:', err.message);
+    }
   }
 
   // Separate pinned vs available files
@@ -752,7 +1174,7 @@ async function getProjectContext(userId, projectId) {
     }
   }
 
-  // Format memory sections for context
+  // Format legacy memory sections for context
   let formattedMemory = null;
   if (memory && memory.sections) {
     const sections = memory.sections;
@@ -782,7 +1204,33 @@ async function getProjectContext(userId, projectId) {
     }
   }
 
-  console.log(`[ProjectContext] Project: ${project.name}, Memory: ${formattedMemory ? 'yes' : 'no'}, Pinned files: ${pinnedFileContents.length}/${pinnedFiles.length}, Total files: ${allFiles.length}`);
+  // Format semantic memories for context
+  let formattedSemanticMemory = null;
+  if (semanticMemories.length > 0) {
+    const factsByCategory = {};
+    for (const mem of semanticMemories) {
+      const cat = mem.category || 'general';
+      if (!factsByCategory[cat]) factsByCategory[cat] = [];
+      factsByCategory[cat].push(`- ${mem.content} (confidence: ${(mem.confidence * 100).toFixed(0)}%)`);
+    }
+
+    const memoryParts = [];
+    for (const [category, facts] of Object.entries(factsByCategory)) {
+      memoryParts.push(`### ${category.charAt(0).toUpperCase() + category.slice(1)}\n${facts.join('\n')}`);
+    }
+    formattedSemanticMemory = memoryParts.join('\n\n');
+  }
+
+  // Format relevant conversation snippets
+  let relevantConversationContext = null;
+  if (semanticConversations.length > 0) {
+    const snippets = semanticConversations.map(c =>
+      `[${new Date(c.timestamp).toLocaleDateString()}] ${c.contentPreview || '...'}`
+    );
+    relevantConversationContext = snippets.join('\n\n');
+  }
+
+  console.log(`[ProjectContext] Project: ${project.name}, Memory: ${formattedMemory ? 'yes' : 'no'}, Semantic: ${semanticMemories.length} facts, Conversations: ${semanticConversations.length}, Pinned files: ${pinnedFileContents.length}/${pinnedFiles.length}, Total files: ${allFiles.length}`);
 
   return {
     project: {
@@ -793,13 +1241,20 @@ async function getProjectContext(userId, projectId) {
     instructions: project.instructions,
     memory: formattedMemory,
     memoryVersion: memory?.version || null,
+    semanticMemory: formattedSemanticMemory,
+    relevantConversations: relevantConversationContext,
     fileManifest,
     pinnedFiles: pinnedFileContents,
+    // Raw semantic data for frontend display
+    rawSemanticMemories: semanticMemories,
+    rawConversations: semanticConversations,
     stats: {
       totalFiles: allFiles.length,
       pinnedCount: pinnedFiles.length,
       pinnedTokensUsed,
-      memoryTokens: formattedMemory ? estimateTokens(formattedMemory) : 0
+      memoryTokens: formattedMemory ? estimateTokens(formattedMemory) : 0,
+      semanticMemoryCount: semanticMemories.length,
+      relevantConversationsCount: semanticConversations.length
     }
   };
 }
@@ -816,9 +1271,65 @@ function generateTitle(message) {
 }
 
 /**
- * Detect artifact in response
+ * Generate stable artifact ID from title and type
+ * This ensures the same artifact title+type always produces the same ID
+ * allowing updates instead of creating duplicates
+ *
+ * IMPORTANT: Must match frontend generateArtifactHash in InlineArtifact.jsx
+ * Format: "${title}_${type}" with spaces replaced by underscores
+ */
+function generateArtifactHash(title, type) {
+  // Match frontend format exactly: underscores, spaces replaced
+  const normalized = `${(title || '').toLowerCase().trim()}_${type}`.replace(/\s+/g, '_');
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return `art_${Math.abs(hash).toString(36)}`;
+}
+
+/**
+ * Detect artifact in response - supports both code fence and <artifact> tag formats
  */
 function detectArtifact(text) {
+  // First check for <artifact> tag format (Claude's native format)
+  const artifactTagMatch = text.match(/<artifact\s+type="([^"]+)"(?:\s+title="([^"]+)")?[^>]*>/i);
+  if (artifactTagMatch) {
+    const type = artifactTagMatch[1].toLowerCase();
+    const title = artifactTagMatch[2] || 'artifact';
+    const extMap = {
+      'svg': 'svg',
+      'html': 'html',
+      'markdown': 'md',
+      'md': 'md',
+      'react': 'jsx',
+      'jsx': 'jsx',
+      'javascript': 'js',
+      'js': 'js',
+      'python': 'py',
+      'json': 'json',
+      'mermaid': 'mermaid',
+      'css': 'css',
+      'typescript': 'ts',
+      'code': 'txt'
+    };
+    const ext = extMap[type] || type;
+    // Clean title for filename
+    const safeName = title.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-').substring(0, 50);
+    // Use stable hash-based ID so same title+type always gets same ID (enables updates)
+    return {
+      id: generateArtifactHash(title, type),
+      name: `${safeName}.${ext}`,
+      title: title,
+      type: type,
+      pattern: '<artifact',
+      format: 'tag'
+    };
+  }
+
+  // Fall back to code fence detection
   const patterns = [
     { regex: /```svg\n/i, type: 'svg', ext: 'svg' },
     { regex: /```markdown\n/i, type: 'markdown', ext: 'md' },
@@ -834,11 +1345,13 @@ function detectArtifact(text) {
 
   for (const pattern of patterns) {
     if (pattern.regex.test(text)) {
+      // For code fences without title, use timestamp (these are typically not named)
       return {
         id: `art_${Date.now()}`,
         name: `artifact.${pattern.ext}`,
         type: pattern.type,
-        pattern: pattern.regex.source
+        pattern: pattern.regex.source,
+        format: 'fence'
       };
     }
   }
@@ -846,9 +1359,27 @@ function detectArtifact(text) {
 }
 
 /**
- * Extract artifact content from response
+ * Extract artifact content from response - supports both formats
  */
 function extractArtifactContent(text, artifact) {
+  // Handle <artifact> tag format
+  if (artifact.format === 'tag') {
+    // Match content between <artifact ...> and </artifact>
+    const tagRegex = /<artifact[^>]*>([\s\S]*?)<\/artifact>/i;
+    const match = text.match(tagRegex);
+    if (match) {
+      return { content: match[1].trim() };
+    }
+    // If no closing tag yet, try to get partial content
+    const openTagRegex = /<artifact[^>]*>([\s\S]*?)$/i;
+    const partialMatch = text.match(openTagRegex);
+    if (partialMatch) {
+      return { content: partialMatch[1].trim(), partial: true };
+    }
+    return null;
+  }
+
+  // Handle code fence format
   const regex = new RegExp(`\`\`\`${artifact.type}\\n([\\s\\S]*?)\`\`\``, 'i');
   const match = text.match(regex);
   if (match) {

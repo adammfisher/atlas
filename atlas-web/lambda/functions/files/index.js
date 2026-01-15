@@ -3,10 +3,10 @@ const {
   success,
   badRequest,
   serverError,
-  getUserId,
   parseBody,
   getPathParam
 } = require('./shared/response');
+const { authenticateRequest, authErrorResponse } = require('./shared/authMiddleware');
 
 const UPLOADS_BUCKET = process.env.UPLOADS_BUCKET;
 const ARTIFACTS_BUCKET = process.env.ARTIFACTS_BUCKET;
@@ -16,17 +16,25 @@ const ARTIFACTS_BUCKET = process.env.ARTIFACTS_BUCKET;
  */
 exports.handler = async (event) => {
   console.log('Files event:', JSON.stringify(event));
-  
+
+  // Authenticate request
+  let user;
+  try {
+    user = authenticateRequest(event);
+  } catch (error) {
+    return authErrorResponse(error);
+  }
+
   const method = event.requestContext?.http?.method || event.httpMethod;
   const path = event.requestContext?.http?.path || event.path;
-  
+
   try {
     if (method === 'POST' && path.includes('/presign')) {
-      return getPresignedUrl(event);
+      return getPresignedUrl(user.userId, event);
     } else if (method === 'GET') {
-      return downloadFile(event);
+      return downloadFile(user.userId, event);
     }
-    
+
     return badRequest('Invalid route');
   } catch (error) {
     console.error('Files error:', error);
@@ -37,8 +45,7 @@ exports.handler = async (event) => {
 /**
  * Get presigned URL for upload
  */
-async function getPresignedUrl(event) {
-  const userId = getUserId(event);
+async function getPresignedUrl(userId, event) {
   const body = parseBody(event);
   
   const { filename, contentType, sessionId, purpose = 'upload' } = body;
@@ -71,7 +78,7 @@ async function getPresignedUrl(event) {
 /**
  * Get download URL for file
  */
-async function downloadFile(event) {
+async function downloadFile(userId, event) {
   const fileKey = getPathParam(event, 'fileKey');
   
   if (!fileKey) {

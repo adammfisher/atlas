@@ -1,12 +1,18 @@
 // Insights uses mock server (localhost:8000) until backend is implemented
 const INSIGHTS_API_URL = import.meta.env.VITE_INSIGHTS_API_URL || 'http://localhost:8000'
 
+// Helper to add credentials to fetch requests
+const withCredentials = (options = {}) => ({
+  ...options,
+  credentials: 'include'
+})
+
 export const insightsService = {
   /**
    * Get all insights for the current user
    */
   async getInsights() {
-    const response = await fetch(`${INSIGHTS_API_URL}/api/insights/`)
+    const response = await fetch(`${INSIGHTS_API_URL}/api/insights/`, withCredentials())
     if (!response.ok) {
       throw new Error('Failed to fetch insights')
     }
@@ -18,7 +24,7 @@ export const insightsService = {
    * Get count of pending insights (for badge)
    */
   async getPendingCount() {
-    const response = await fetch(`${INSIGHTS_API_URL}/api/insights/pending/count`)
+    const response = await fetch(`${INSIGHTS_API_URL}/api/insights/pending/count`, withCredentials())
     if (!response.ok) {
       throw new Error('Failed to fetch pending count')
     }
@@ -30,7 +36,7 @@ export const insightsService = {
    * Add a new artifact insight (called when artifact is detected in chat)
    */
   async addArtifactInsight(artifact, sessionId, messageId) {
-    const response = await fetch(`${INSIGHTS_API_URL}/api/insights`, {
+    const response = await fetch(`${INSIGHTS_API_URL}/api/insights`, withCredentials({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -40,7 +46,7 @@ export const insightsService = {
         sessionId,
         messageId
       }),
-    })
+    }))
 
     if (!response.ok) {
       throw new Error('Failed to add artifact insight')
@@ -56,12 +62,12 @@ export const insightsService = {
   async shareInsights(insightIds) {
     const results = await Promise.all(
       insightIds.map(async (id) => {
-        const response = await fetch(`${INSIGHTS_API_URL}/api/insights/${id}/share`, {
+        const response = await fetch(`${INSIGHTS_API_URL}/api/insights/${id}/share`, withCredentials({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-        })
+        }))
 
         if (!response.ok) {
           throw new Error(`Failed to share insight ${id}`)
@@ -78,9 +84,9 @@ export const insightsService = {
    * Dismiss an insight
    */
   async dismissInsight(insightId) {
-    const response = await fetch(`${INSIGHTS_API_URL}/api/insights/${insightId}/dismiss`, {
+    const response = await fetch(`${INSIGHTS_API_URL}/api/insights/${insightId}/dismiss`, withCredentials({
       method: 'POST',
-    })
+    }))
 
     if (!response.ok) {
       throw new Error('Failed to dismiss insight')
@@ -93,9 +99,9 @@ export const insightsService = {
    * Remove a shared artifact from Knowledge Core
    */
   async removeFromKnowledgeCore(kcArtifactId) {
-    const response = await fetch(`${INSIGHTS_API_URL}/api/knowledge-core/artifacts/${kcArtifactId}`, {
+    const response = await fetch(`${INSIGHTS_API_URL}/api/knowledge-core/artifacts/${kcArtifactId}`, withCredentials({
       method: 'DELETE',
-    })
+    }))
 
     if (!response.ok) {
       throw new Error('Failed to remove from Knowledge Core')
@@ -108,9 +114,9 @@ export const insightsService = {
    * Update a previously shared insight
    */
   async updateSharedInsight(insightId) {
-    const response = await fetch(`${INSIGHTS_API_URL}/api/insights/${insightId}/update-shared`, {
+    const response = await fetch(`${INSIGHTS_API_URL}/api/insights/${insightId}/update-shared`, withCredentials({
       method: 'POST',
-    })
+    }))
 
     if (!response.ok) {
       throw new Error('Failed to update insight')
@@ -124,7 +130,8 @@ export const insightsService = {
    */
   async searchSharedInsights(query) {
     const response = await fetch(
-      `${INSIGHTS_API_URL}/api/insights/shared/search?query=${encodeURIComponent(query)}`
+      `${INSIGHTS_API_URL}/api/insights/shared/search?query=${encodeURIComponent(query)}`,
+      withCredentials()
     )
 
     if (!response.ok) {

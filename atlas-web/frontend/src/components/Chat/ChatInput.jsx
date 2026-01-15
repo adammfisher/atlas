@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Plus, Clock, ArrowUp, Database } from 'lucide-react'
+import { Plus, Clock, ArrowUp, Database, X, AlertCircle } from 'lucide-react'
 import PlusMenu from './PlusMenu'
 import ModelSelector from './ModelSelector'
 import FilePreview from './FilePreview'
@@ -31,7 +31,9 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
     knowledgeCoreEnabled,
     setKnowledgeCoreEnabled,
     enabledConnectors,
-    currentSessionId
+    currentSessionId,
+    fileUploadError,
+    clearFileUploadError
   } = useChatStore()
 
   // Auto-resize textarea
@@ -58,6 +60,16 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
       textareaRef.current?.focus()
     }, 50)
   }, [currentSessionId, location.key, clearPendingFiles])
+
+  // Auto-clear file upload error after 5 seconds
+  useEffect(() => {
+    if (fileUploadError) {
+      const timer = setTimeout(() => {
+        clearFileUploadError()
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [fileUploadError, clearFileUploadError])
 
   // Handle paste for images
   const handlePaste = (e) => {
@@ -148,6 +160,30 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* File upload error toast */}
+      {fileUploadError && (
+        <div
+          className="absolute -top-16 left-0 right-0 mx-4 px-4 py-3 rounded-lg flex items-start gap-3 shadow-lg z-50"
+          style={{
+            backgroundColor: 'hsl(0, 60%, 20%)',
+            borderWidth: '1px',
+            borderColor: 'hsl(0, 60%, 35%)'
+          }}
+        >
+          <AlertCircle size={18} className="flex-shrink-0 mt-0.5" style={{ color: 'hsl(0, 80%, 65%)' }} />
+          <span className="text-[13px] flex-1" style={{ color: 'hsl(0, 30%, 90%)' }}>
+            {fileUploadError}
+          </span>
+          <button
+            onClick={clearFileUploadError}
+            className="flex-shrink-0 p-0.5 rounded hover:bg-white/10 transition-colors"
+            style={{ color: 'hsl(0, 30%, 70%)' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Drag overlay */}
       {isDragOver && (
         <div className="absolute inset-0 bg-[hsl(60,2.7%,14.5%)] bg-opacity-90 flex items-center justify-center z-50 rounded-[20px] border-2 border-dashed border-[hsl(24,75%,50%)]">
@@ -285,7 +321,7 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,.pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.html,.md,.zip"
+        accept=".txt,.md,.py,.js,.jsx,.ts,.tsx,.java,.cpp,.c,.h,.hpp,.cs,.go,.rb,.php,.swift,.kt,.rs,.scala,.sql,.sh,.bash,.zsh,.ps1,.bat,.cmd,.json,.xml,.csv,.tsv,.yaml,.yml,.html,.htm,.css,.scss,.sass,.less,.pdf,.docx,.png,.jpg,.jpeg,.gif,.webp"
         onChange={handleFileSelect}
         className="hidden"
       />

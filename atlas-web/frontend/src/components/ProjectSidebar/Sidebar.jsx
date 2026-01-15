@@ -4,8 +4,6 @@ import {
   FolderOpen,
   Plus,
   FileText,
-  ChevronDown,
-  ChevronRight,
   MoreHorizontal,
   Search,
   X,
@@ -18,9 +16,9 @@ import {
   LogOut,
   ChevronUp
 } from 'lucide-react'
-// Note: Some of these icons may be unused after removing the expandable Projects section
 import { useChatStore } from '../../hooks/useChatStore'
-import { sessionsService, artifactsService } from '../../services/chatService'
+import { useAuth } from '../../context/AuthContext'
+import { sessionsService } from '../../services/chatService'
 import SettingsModal from '../Settings/SettingsModal'
 import MCPSettingsModal from '../Settings/MCPSettingsModal'
 
@@ -46,7 +44,6 @@ function AllyLogo({ className = "" }) {
 function Sidebar() {
   const navigate = useNavigate()
   const { projectId } = useParams()
-  const [artifactsExpanded, setArtifactsExpanded] = useState(false)
   const [hoveredChat, setHoveredChat] = useState(null)
   const [openMenuId, setOpenMenuId] = useState(null)
   const [renamingId, setRenamingId] = useState(null)
@@ -70,9 +67,8 @@ function Sidebar() {
     user
   } = useChatStore()
 
-  // State for artifacts loaded from backend
-  const [sidebarArtifacts, setSidebarArtifacts] = useState([])
-  const [isLoadingArtifacts, setIsLoadingArtifacts] = useState(false)
+  const { logout } = useAuth()
+
   const [isLoadingSessions, setIsLoadingSessions] = useState(true)
 
   // Fetch sessions from backend on mount - always fetch immediately
@@ -124,29 +120,6 @@ function Sidebar() {
 
     return () => { isMounted = false }
   }, [])
-
-  // Fetch artifacts for current session when it changes
-  useEffect(() => {
-    if (!currentSessionId) {
-      setSidebarArtifacts([])
-      return
-    }
-
-    const fetchArtifacts = async () => {
-      setIsLoadingArtifacts(true)
-      try {
-        const artifacts = await artifactsService.listForSession(currentSessionId)
-        setSidebarArtifacts(artifacts || [])
-      } catch (e) {
-        console.error('Failed to fetch artifacts:', e)
-        setSidebarArtifacts([])
-      } finally {
-        setIsLoadingArtifacts(false)
-      }
-    }
-
-    fetchArtifacts()
-  }, [currentSessionId])
 
   // Close menu on outside click
   useEffect(() => {
@@ -330,52 +303,18 @@ function Sidebar() {
           </Link>
         </div>
 
-        {/* Artifacts Section */}
-        <div className="mb-3">
-          <button
-            onClick={() => setArtifactsExpanded(!artifactsExpanded)}
+        {/* Artifacts Link */}
+        <div className="mb-2">
+          <Link
+            to="/artifacts"
             className="flex items-center gap-2 w-full px-2 py-1.5 text-[13px] rounded-lg transition-colors"
             style={{ color: 'var(--text-primary)' }}
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           >
-            {artifactsExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             <FileText size={14} />
             <span>Artifacts</span>
-            {sidebarArtifacts.length > 0 && (
-              <span className="ml-auto text-[11px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
-                {sidebarArtifacts.length}
-              </span>
-            )}
-          </button>
-
-          {artifactsExpanded && (
-            <div className="mt-1">
-              {isLoadingArtifacts ? (
-                <p className="text-[12px] pl-8 py-1.5" style={{ color: 'var(--text-muted)' }}>
-                  Loading...
-                </p>
-              ) : sidebarArtifacts.length === 0 ? (
-                <p className="text-[12px] pl-8 py-1.5" style={{ color: 'var(--text-muted)' }}>
-                  {currentSessionId ? 'No artifacts in this chat' : 'Select a chat to see artifacts'}
-                </p>
-              ) : (
-                sidebarArtifacts.slice(0, 10).map((artifact) => (
-                  <div
-                    key={artifact.id || artifact.artifactId}
-                    className="flex items-center gap-2 py-1.5 px-2 pl-8 text-[13px] rounded-lg transition-colors cursor-pointer"
-                    style={{ color: 'var(--text-primary)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    title={artifact.title || artifact.name}
-                  >
-                    <FileText size={12} style={{ color: '#CD477E' }} />
-                    <span className="truncate">{artifact.title || artifact.name || 'Untitled'}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
+          </Link>
         </div>
 
         {/* Recents Section */}
@@ -558,10 +497,10 @@ function Sidebar() {
               </button>
               <div className="border-t border-[var(--border-color)]" />
               <button
-                onClick={() => {
-                  // TODO: Implement logout
-                  console.log('Logout')
+                onClick={async () => {
                   setShowUserMenu(false)
+                  await logout()
+                  navigate('/login')
                 }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 transition-colors text-left"
                 style={{ color: 'var(--text-primary)' }}

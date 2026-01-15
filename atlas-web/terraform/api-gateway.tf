@@ -4,10 +4,11 @@ resource "aws_apigatewayv2_api" "main" {
   protocol_type = "HTTP"
 
   cors_configuration {
-    allow_origins = ["*"] # Restrict in production
-    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    allow_headers = ["Content-Type", "Authorization", "X-User-Id"]
-    max_age       = 3600
+    allow_origins     = ["https://d2e9zue1tj9oj5.cloudfront.net", "http://localhost:3000"]
+    allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allow_headers     = ["Content-Type", "Authorization", "X-User-Id", "Cookie"]
+    allow_credentials = true
+    max_age           = 3600
   }
 }
 
@@ -188,6 +189,12 @@ resource "aws_apigatewayv2_route" "project_files_upload_zip" {
   target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
 }
 
+resource "aws_apigatewayv2_route" "project_files_from_artifact" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /api/projects/{projectId}/files/from-artifact"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
 # Project Memory Routes
 resource "aws_apigatewayv2_route" "project_memory_get" {
   api_id    = aws_apigatewayv2_api.main.id
@@ -207,10 +214,41 @@ resource "aws_apigatewayv2_route" "project_memory_regenerate" {
   target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
 }
 
-# Project Chats Route
+# Project Semantic Memories Routes (S3 Vectors)
+resource "aws_apigatewayv2_route" "project_memories_list" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /api/projects/{projectId}/memories"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+resource "aws_apigatewayv2_route" "project_memories_add" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /api/projects/{projectId}/memories"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+resource "aws_apigatewayv2_route" "project_memories_update" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "PUT /api/projects/{projectId}/memories/{memoryId}"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+resource "aws_apigatewayv2_route" "project_memories_delete" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "DELETE /api/projects/{projectId}/memories/{memoryId}"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+# Project Chats Routes
 resource "aws_apigatewayv2_route" "project_chats_list" {
   api_id    = aws_apigatewayv2_api.main.id
   route_key = "GET /api/projects/{projectId}/chats"
+  target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
+}
+
+resource "aws_apigatewayv2_route" "project_chats_delete" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "DELETE /api/projects/{projectId}/chats/{chatId}"
   target    = "integrations/${aws_apigatewayv2_integration.projects.id}"
 }
 
@@ -332,4 +370,36 @@ resource "aws_apigatewayv2_route" "artifacts_delete" {
   api_id    = aws_apigatewayv2_api.main.id
   route_key = "DELETE /api/artifacts/{artifactId}"
   target    = "integrations/${aws_apigatewayv2_integration.artifacts.id}"
+}
+
+# ============ Auth Routes ============
+resource "aws_apigatewayv2_integration" "auth" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.auth.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "auth_login" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /api/auth/login"
+  target    = "integrations/${aws_apigatewayv2_integration.auth.id}"
+}
+
+resource "aws_apigatewayv2_route" "auth_logout" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /api/auth/logout"
+  target    = "integrations/${aws_apigatewayv2_integration.auth.id}"
+}
+
+resource "aws_apigatewayv2_route" "auth_me" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /api/auth/me"
+  target    = "integrations/${aws_apigatewayv2_integration.auth.id}"
+}
+
+resource "aws_apigatewayv2_route" "auth_register" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /api/auth/register"
+  target    = "integrations/${aws_apigatewayv2_integration.auth.id}"
 }

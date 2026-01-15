@@ -225,3 +225,49 @@ resource "aws_dynamodb_table" "project_memory" {
   # - generatedAt: timestamp
   # - tokenCount: estimated tokens for budget tracking
 }
+
+# Users table - stores user credentials and profile info
+resource "aws_dynamodb_table" "users" {
+  name         = "${var.project_name}-users"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "userId"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "username"
+    type = "S"
+  }
+
+  attribute {
+    name = "email"
+    type = "S"
+  }
+
+  # GSI for lookup by username (login)
+  global_secondary_index {
+    name            = "username-index"
+    hash_key        = "username"
+    projection_type = "ALL"
+  }
+
+  # GSI for lookup by email (password reset, uniqueness check)
+  global_secondary_index {
+    name            = "email-index"
+    hash_key        = "email"
+    projection_type = "ALL"
+  }
+
+  # User items include:
+  # - userId: partition key (format: "usr_" + nanoid(12))
+  # - username: human-readable login name, unique
+  # - email: unique, for future password reset
+  # - passwordHash: bcrypt hashed password (cost 12)
+  # - displayName: shown in UI
+  # - role: "admin" or "user"
+  # - createdAt: timestamp
+  # - updatedAt: timestamp
+}

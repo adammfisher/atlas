@@ -14,6 +14,9 @@ export const useChatStore = create(
       projects: [],
       currentSessionId: null,
 
+      // Semantic memory context per project: { projectId: { semanticMemoryCount, relevantConversationsCount, lastUpdated } }
+      projectMemoryContext: {},
+
       // Helper function to get current messages
       getMessages: () => {
         const state = get()
@@ -187,18 +190,55 @@ export const useChatStore = create(
 
       clearMessages: () => set({ currentSessionId: null }),
 
+      // File upload error state
+      fileUploadError: null,
+      setFileUploadError: (error) => set({ fileUploadError: error }),
+      clearFileUploadError: () => set({ fileUploadError: null }),
+
       // Actions - Files
       addPendingFile: (file) => set((state) => {
+        // Clear any previous error
+        const clearError = { fileUploadError: null }
+
         // Check limits
         if (state.pendingFiles.length >= 20) {
-          console.warn('Maximum 20 files allowed')
-          return state
+          return { ...state, fileUploadError: 'Maximum 20 files allowed' }
         }
         if (file.size > 30 * 1024 * 1024) {
-          console.warn('File exceeds 30MB limit')
-          return state
+          return { ...state, fileUploadError: 'File exceeds 30MB limit' }
         }
-        return { pendingFiles: [...state.pendingFiles, file] }
+
+        // Validate file type
+        const ext = file.name?.split('.').pop()?.toLowerCase()
+        const mimeType = file.type?.toLowerCase() || ''
+
+        // Supported file extensions
+        const supportedExtensions = [
+          // Text-based formats
+          'txt', 'md',
+          // Code files
+          'py', 'js', 'jsx', 'ts', 'tsx', 'java', 'cpp', 'c', 'h', 'hpp',
+          'cs', 'go', 'rb', 'php', 'swift', 'kt', 'rs', 'scala', 'sql',
+          'sh', 'bash', 'zsh', 'ps1', 'bat', 'cmd',
+          // Data formats
+          'json', 'xml', 'csv', 'tsv', 'yaml', 'yml',
+          // Web
+          'html', 'htm', 'css', 'scss', 'sass', 'less',
+          // Documents
+          'pdf', 'docx',
+          // Images
+          'png', 'jpg', 'jpeg', 'gif', 'webp'
+        ]
+
+        // Check by extension
+        if (!supportedExtensions.includes(ext)) {
+          return {
+            ...state,
+            fileUploadError: `Unsupported file type: .${ext}. Supported formats: text files (.txt, .md), code files, JSON, XML, CSV, TSV, HTML, PDF (.pdf), Word (.docx), and images (.png, .jpg, .gif, .webp)`
+          }
+        }
+
+        return { ...clearError, pendingFiles: [...state.pendingFiles, file] }
       }),
 
       removePendingFile: (index) => set((state) => ({
@@ -269,6 +309,26 @@ export const useChatStore = create(
       // Actions - Appearance
       setColorMode: (mode) => set({ colorMode: mode }),
       setChatFont: (font) => set({ chatFont: font }),
+
+      // Actions - Project Memory Context
+      setProjectMemoryContext: (projectId, context) => set((state) => ({
+        projectMemoryContext: {
+          ...state.projectMemoryContext,
+          [projectId]: {
+            ...context,
+            lastUpdated: new Date().toISOString()
+          }
+        }
+      })),
+
+      // Clear project memory context (on logout, etc.)
+      clearProjectMemoryContext: (projectId = null) => set((state) => {
+        if (projectId) {
+          const { [projectId]: _, ...rest } = state.projectMemoryContext
+          return { projectMemoryContext: rest }
+        }
+        return { projectMemoryContext: {} }
+      }),
     }),
     {
       name: 'ally-chat-store',

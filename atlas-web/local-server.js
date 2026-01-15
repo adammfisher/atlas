@@ -12,7 +12,11 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-app.use(cors());
+// Configure CORS to allow credentials (cookies) from frontend
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 
 // =============================================================================
@@ -231,18 +235,21 @@ const AWS_API_URL = 'https://famlht6lp2.execute-api.us-east-1.amazonaws.com';
 // Lambda Function URL for streaming chat (supports true SSE streaming)
 const STREAM_URL = 'https://vminx32zctbv4pqdwqyjllacwi0bjidt.lambda-url.us-east-1.on.aws/';
 
+// All chat requests are proxied to AWS Lambda for consistency
+const USE_LOCAL_CHAT = false;
+
 // Store pending insights (in-memory for now) - declared early so all endpoints can access
 let pendingInsights = [];
 
 /**
- * Main streaming chat endpoint - proxies to AWS Lambda
- * Knowledge Core query now happens in the frontend (visible in browser network tab)
- * This endpoint combines message + knowledge_context for Claude, but sends clean message for storage
+ * Main streaming chat endpoint
+ * When USE_LOCAL_CHAT is true, handles chat locally using bedrock.js
+ * When false, proxies to AWS Lambda
  */
 app.post('/api/chat/message/stream', async (req, res) => {
   const { message, knowledge_context, files, session_id, project_id, model = 'haiku', web_search_enabled = true } = req.body;
 
-  console.log(`\n[Chat] Proxying to AWS: "${message?.substring(0, 50) || '(no message)'}..."`);
+  console.log(`\n[Chat] ${USE_LOCAL_CHAT ? 'LOCAL' : 'AWS'}: "${message?.substring(0, 50) || '(no message)'}..."`);
   if (knowledge_context) {
     console.log(`[Chat] With knowledge context (${knowledge_context.length} chars)`);
   }
@@ -262,6 +269,91 @@ app.post('/api/chat/message/stream', async (req, res) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
+  // =========================================================================
+  // LOCAL CHAT HANDLER - Uses local bedrock.js code
+  // =========================================================================
+  if (USE_LOCAL_CHAT) {
+    try {
+      console.log('[Chat-Local] Processing locally with bedrock.js');
+
+      // Build message for Claude: prepend knowledge context if present
+      const messageForClaude = knowledge_context
+        ? `${knowledge_context}\n\n${message}`
+        : message;
+
+      // Prepare files for Bedrock format
+      const messageFiles = (files || []).map(f => ({
+        name: f.name,
+        mediaType: f.type,
+        base64: f.base64
+      }));
+
+      // Build system prompt (no project context for local mode)
+      const systemPrompt = buildSystemPrompt(null, web_search_enabled, []);
+
+      // Build messages array
+      const messages = buildMessages(
+        [], // No history for local mode
+        { text: messageForClaude || '', files: messageFiles },
+        null, // No project context
+        null  // No compacted context
+      );
+
+      console.log('[Chat-Local] Messages built:', messages.length);
+      messages.forEach((m, i) => {
+        const contentTypes = m.content.map(c => Object.keys(c)[0]).join(', ');
+        console.log(`  [${i}] ${m.role}: ${contentTypes} (${m.content.length} blocks)`);
+      });
+
+      // Notify client we're processing files
+      if (messageFiles.length > 0) {
+        sendEvent({ type: 'processing', message: `Processing ${messageFiles.length} file(s)...` });
+      }
+
+      // Stream response from Bedrock
+      let fullResponse = '';
+      for await (const chunk of streamChatWithTools({
+        messages,
+        model,
+        systemPrompt,
+        webSearch: web_search_enabled
+      })) {
+        if (chunk.type === 'text') {
+          fullResponse += chunk.content;
+          sendEvent({ type: 'chunk', content: chunk.content });
+        } else if (chunk.type === 'thinking') {
+          sendEvent({ type: 'thinking', content: chunk.content });
+        } else if (chunk.type === 'search_start') {
+          sendEvent({ type: 'search_start', query: chunk.query });
+        } else if (chunk.type === 'search_results') {
+          sendEvent({ type: 'search_results', query: chunk.query, results: chunk.results });
+        }
+      }
+
+      // Send done event
+      sendEvent({
+        type: 'done',
+        message_id: `msg_${Date.now()}_assistant`,
+        session_id: session_id || `session_${Date.now()}`
+      });
+
+    } catch (error) {
+      console.error('[Chat-Local] Error:', error);
+      sendEvent({ type: 'error', message: error.message });
+      sendEvent({
+        type: 'done',
+        message_id: `msg_${Date.now()}_assistant`,
+        session_id: session_id || `session_${Date.now()}`
+      });
+    }
+
+    res.end();
+    return;
+  }
+
+  // =========================================================================
+  // AWS PROXY HANDLER - Forwards to Lambda Function URL
+  // =========================================================================
   try {
     // Build message for Claude: prepend knowledge context if present
     // AWS will store the clean `message` for title/history, but use `message_for_claude` for the actual request
@@ -289,10 +381,12 @@ app.post('/api/chat/message/stream', async (req, res) => {
     // We also send 'message_display' for the clean version if Lambda wants to store it separately
     console.log(`[Chat] Streaming via Lambda Function URL: ${STREAM_URL}`);
     console.log(`[Chat] Message for Claude (${messageForClaude?.length || 0} chars)`);
+    console.log(`[Chat] Cookie header present:`, !!req.headers.cookie);
     const awsResponse = await fetch(STREAM_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || '',
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       },
       body: JSON.stringify(requestBody)
@@ -441,10 +535,12 @@ app.post('/api/chat/message/with-files/stream', async (req, res) => {
 
   try {
     console.log(`[Chat+Files] Streaming via Lambda Function URL: ${STREAM_URL}`);
+    console.log(`[Chat+Files] Cookie header present:`, !!req.headers.cookie);
     const awsResponse = await fetch(STREAM_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || '',
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       },
       body: JSON.stringify({
@@ -480,11 +576,109 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'atlas-web-local' });
 });
 
+// =============================================================================
+// AUTH ENDPOINTS - Proxy to AWS for authentication
+// =============================================================================
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    console.log('[Auth] Login attempt for:', req.body.username);
+    const response = await fetch(`${AWS_API_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body)
+    });
+
+    const data = await response.json();
+
+    // Forward set-cookie headers from AWS, removing Secure flag for localhost
+    const setCookie = response.headers.get('set-cookie');
+    if (setCookie) {
+      // Remove Secure flag so cookies work over HTTP on localhost
+      const localCookie = setCookie.replace(/;\s*Secure/gi, '');
+      res.setHeader('Set-Cookie', localCookie);
+    }
+
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('[Auth] Login error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Logout
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/auth/logout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || ''
+      }
+    });
+
+    const data = await response.json();
+
+    // Forward set-cookie headers from AWS (clears the cookie)
+    const setCookie = response.headers.get('set-cookie');
+    if (setCookie) {
+      const localCookie = setCookie.replace(/;\s*Secure/gi, '');
+      res.setHeader('Set-Cookie', localCookie);
+    }
+
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('[Auth] Logout error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get current user
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/auth/me`, {
+      headers: {
+        'Cookie': req.headers.cookie || ''
+      }
+    });
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('[Auth] Get me error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Register (admin only)
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const response = await fetch(`${AWS_API_URL}/api/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || ''
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('[Auth] Register error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Proxy sessions to AWS backend
 app.get('/api/sessions', async (req, res) => {
   try {
     const response = await fetch(`${AWS_API_URL}/api/sessions`, {
-      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
     });
     const data = await response.json();
     res.json(data);
@@ -502,6 +696,7 @@ app.post('/api/sessions', async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || '',
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       },
       body: JSON.stringify(req.body)
@@ -523,7 +718,10 @@ app.delete('/api/sessions/:sessionId', async (req, res) => {
   try {
     const response = await fetch(`${AWS_API_URL}/api/sessions/${sessionId}`, {
       method: 'DELETE',
-      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
     });
 
     if (!response.ok) {
@@ -547,7 +745,10 @@ app.delete('/api/sessions/:sessionId', async (req, res) => {
 app.get('/api/sessions/:sessionId/messages', async (req, res) => {
   try {
     const response = await fetch(`${AWS_API_URL}/api/sessions/${req.params.sessionId}/messages`, {
-      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
     });
     const data = await response.json();
     res.json(data);
@@ -561,7 +762,10 @@ app.get('/api/sessions/:sessionId/messages', async (req, res) => {
 app.get('/api/projects', async (req, res) => {
   try {
     const response = await fetch(`${AWS_API_URL}/api/projects`, {
-      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
     });
     const data = await response.json();
     res.json(data);
@@ -578,6 +782,7 @@ app.post('/api/projects', async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || '',
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       },
       body: JSON.stringify(req.body)
@@ -594,7 +799,10 @@ app.post('/api/projects', async (req, res) => {
 app.get('/api/projects/:projectId', async (req, res) => {
   try {
     const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}`, {
-      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
     });
     const data = await response.json();
     res.json(data);
@@ -611,6 +819,7 @@ app.put('/api/projects/:projectId', async (req, res) => {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || '',
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       },
       body: JSON.stringify(req.body)
@@ -628,10 +837,24 @@ app.delete('/api/projects/:projectId', async (req, res) => {
   try {
     const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}`, {
       method: 'DELETE',
-      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
     });
-    const data = await response.json();
-    res.json(data);
+
+    // Handle empty response body (DELETE often returns 204 No Content)
+    const text = await response.text();
+    if (text) {
+      try {
+        const data = JSON.parse(text);
+        res.status(response.status).json(data);
+      } catch {
+        res.status(response.status).json({ success: response.ok });
+      }
+    } else {
+      res.status(response.ok ? 200 : response.status).json({ success: response.ok });
+    }
   } catch (error) {
     console.error('[Proxy] Delete project error:', error.message);
     res.status(500).json({ error: error.message });
@@ -642,7 +865,10 @@ app.delete('/api/projects/:projectId', async (req, res) => {
 app.get('/api/projects/:projectId/files', async (req, res) => {
   try {
     const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/files`, {
-      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
     });
     const data = await response.json();
     res.json(data);
@@ -659,6 +885,7 @@ app.post('/api/projects/:projectId/files', async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || '',
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       },
       body: JSON.stringify(req.body)
@@ -678,6 +905,7 @@ app.put('/api/projects/:projectId/files/:fileId/pin', async (req, res) => {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || '',
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       },
       body: JSON.stringify(req.body)
@@ -695,7 +923,10 @@ app.delete('/api/projects/:projectId/files/:fileId', async (req, res) => {
   try {
     const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/files/${req.params.fileId}`, {
       method: 'DELETE',
-      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
     });
     const data = await response.json();
     res.json(data);
@@ -709,7 +940,10 @@ app.delete('/api/projects/:projectId/files/:fileId', async (req, res) => {
 app.get('/api/projects/:projectId/memory', async (req, res) => {
   try {
     const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/memory`, {
-      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
     });
     const data = await response.json();
     res.json(data);
@@ -726,6 +960,7 @@ app.put('/api/projects/:projectId/memory', async (req, res) => {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || '',
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       },
       body: JSON.stringify(req.body)
@@ -745,6 +980,7 @@ app.post('/api/projects/:projectId/memory/regenerate', async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || '',
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       }
     });
@@ -760,7 +996,10 @@ app.post('/api/projects/:projectId/memory/regenerate', async (req, res) => {
 app.get('/api/projects/:projectId/chats', async (req, res) => {
   try {
     const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/chats`, {
-      headers: { 'X-User-Id': req.headers['x-user-id'] || 'demo-user' }
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
     });
     const data = await response.json();
     res.json(data);

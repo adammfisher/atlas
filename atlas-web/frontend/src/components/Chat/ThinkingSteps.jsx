@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
-import { ChevronDown, ChevronRight, Globe, Loader2, Brain, Image, FileText, Database, BookOpen, Eye } from 'lucide-react'
+import { ChevronDown, ChevronRight, Globe, Loader2, Brain, Image, FileText, Database, BookOpen, Eye, Archive } from 'lucide-react'
 
 // Ally brand pink color
 const ALLY_PINK = '#CD477E'
 const KNOWLEDGE_COLOR = '#4CAF50' // Green for knowledge context
+const COMPACTION_COLOR = '#FF9800' // Orange for compaction notification
 
 function ThinkingSteps({ steps, onViewArtifact }) {
   const [isExpanded, setIsExpanded] = useState(false) // Collapsed by default
@@ -15,6 +16,7 @@ function ThinkingSteps({ steps, onViewArtifact }) {
   const thinkingSteps = steps.filter(s => s.type === 'thinking')
   const processingSteps = steps.filter(s => s.type === 'processing')
   const knowledgeSteps = steps.filter(s => s.type === 'knowledge_context')
+  const compactionSteps = steps.filter(s => s.type === 'compaction')
   const isSearching = searchSteps.some(s => s.loading)
   const isProcessing = processingSteps.some(s => s.loading)
 
@@ -45,6 +47,9 @@ function ThinkingSteps({ steps, onViewArtifact }) {
       return processingSteps[processingSteps.length - 1].message
     }
     const parts = []
+    if (compactionSteps.length > 0) {
+      parts.push('Conversation compacted')
+    }
     if (knowledgeSteps.length > 0) {
       const context = knowledgeSteps[0].context
       const count = (context.artifacts?.length || 0) + (context.patterns?.length || 0) + (context.adrs?.length || 0)
@@ -251,6 +256,25 @@ function ThinkingSteps({ steps, onViewArtifact }) {
                   <p className="text-[13px]" style={{ color: 'hsl(48, 4.8%, 59.2%)' }}>
                     {step.content}
                   </p>
+                </div>
+              )}
+
+              {step.type === 'compaction' && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Archive size={14} style={{ color: COMPACTION_COLOR }} />
+                    <span className="text-[13px] font-medium" style={{ color: COMPACTION_COLOR }}>
+                      {step.message || 'Conversation compacted'}
+                    </span>
+                  </div>
+                  {step.stats && (
+                    <div className="ml-5 text-[12px]" style={{ color: 'hsl(48, 4.8%, 59.2%)' }}>
+                      <p>{step.stats.summarizedMessages} older messages summarized to maintain context quality.</p>
+                      <p className="mt-1">
+                        {step.stats.preservedMessages} recent messages preserved.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

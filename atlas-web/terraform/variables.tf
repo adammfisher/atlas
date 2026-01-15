@@ -28,3 +28,9 @@ variable "opensearch_url" {
   type        = string
   default     = ""
 }
+
+variable "cors_origin" {
+  description = "CORS origin for API responses (set to your frontend URL in production)"
+  type        = string
+  default     = "https://d2e9zue1tj9oj5.cloudfront.net"
+}

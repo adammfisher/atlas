@@ -110,13 +110,13 @@ async function executeTool(toolName, toolInput) {
   return JSON.stringify({ error: `Unknown tool: ${toolName}` });
 }
 
-// Claude 3.5 inference profiles (us. prefix for cross-region inference)
-// NOTE: Currently only Haiku is enabled for cost control
+// Claude inference profiles (us. prefix for cross-region inference)
+// NOTE: Using Haiku 4.5 which supports both text and image input
 const MODELS = {
-  haiku: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+  haiku: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
   // sonnet and opus disabled for now - redirect to haiku
-  sonnet: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
-  opus: 'us.anthropic.claude-3-5-haiku-20241022-v1:0'
+  sonnet: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+  opus: 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
 };
 
 // Default model for all requests
@@ -187,8 +187,9 @@ function calculateHistoryTokens(messages) {
  * Build system prompt with optional project context
  * @param {Object|string} projectContext - Enhanced project context object or legacy instructions string
  * @param {boolean} webSearch - Whether web search is enabled
+ * @param {Array} existingArtifacts - Array of existing artifacts in the conversation
  */
-function buildSystemPrompt(projectContext = null, webSearch = false) {
+function buildSystemPrompt(projectContext = null, webSearch = false, existingArtifacts = []) {
   let base = `You are a helpful AI research assistant for enterprise users. You help with:
 - Analyzing documents and data
 - Answering questions about business processes
@@ -233,6 +234,18 @@ IMPORTANT RULES:
 4. The title should be descriptive and specific
 5. Do NOT use code blocks (\`\`\`) inside artifacts - put the raw content directly
 
+CRITICAL - ARTIFACT UPDATES:
+6. When the user asks to update, modify, revise, change, add to, or expand an existing artifact, you MUST:
+   - Look at the <existing_artifacts> section below to see what artifacts exist
+   - Use the EXACT SAME title as the original artifact (copy it character-for-character)
+   - This is REQUIRED for the versioning system to work
+   - If you use a different title, it creates a duplicate instead of updating
+
+   WRONG: User has "AI Tools Ranking" → You create "Top 30 AI Tools Ranking" ❌
+   RIGHT: User has "AI Tools Ranking" → You create "AI Tools Ranking" with updated content ✓
+
+   The user's request to "show top 30" or "add more items" means UPDATE the existing artifact, not create a new one.
+
 Examples:
 
 For a Mermaid diagram:
@@ -270,6 +283,25 @@ For HTML:
 
 Be concise but thorough. Use clear formatting when helpful.`;
 
+  // Add existing artifacts context so Claude knows what artifacts exist and can update them
+  if (existingArtifacts && existingArtifacts.length > 0) {
+    base += `\n\n<existing_artifacts>
+⚠️ CRITICAL: These artifacts ALREADY EXIST. When updating ANY of these, you MUST copy the title EXACTLY (character-for-character) or a duplicate will be created.
+
+${existingArtifacts.map(a => `EXISTING: "${a.title}" (type: ${a.type})`).join('\n')}
+
+RULES FOR UPDATES:
+- If user says "update", "modify", "expand", "add to", "change", or similar → Use EXACT title from above
+- Do NOT paraphrase or improve the title
+- Do NOT add prefixes like "Updated:" or "V2:"
+- Copy the title string EXACTLY as shown above
+
+Example: User says "add more items to the diagram"
+✓ CORRECT: <artifact type="mermaid" title="${existingArtifacts[0]?.title || 'AWS Multi-Tier Web Application Architecture'}">
+✗ WRONG: <artifact type="mermaid" title="Updated AWS Architecture"> or any other variation
+</existing_artifacts>`;
+  }
+
   // Handle enhanced project context (object) or legacy instructions (string)
   if (projectContext) {
     if (typeof projectContext === 'string') {
@@ -289,13 +321,31 @@ Be concise but thorough. Use clear formatting when helpful.`;
         base += `\n\n<project_instructions>\n${projectContext.instructions}\n</project_instructions>`;
       }
 
-      // Add synthesized memory (high-priority context)
+      // Add synthesized memory (high-priority context) - legacy DynamoDB format
       if (projectContext.memory) {
         base += `\n\n<project_memory>
 This is synthesized knowledge from previous conversations about this project. Use this context to maintain continuity.
 
 ${projectContext.memory}
 </project_memory>`;
+      }
+
+      // Add semantic memory facts retrieved via vector search (most relevant to current query)
+      if (projectContext.semanticMemory) {
+        base += `\n\n<semantic_memory>
+These are relevant facts retrieved from previous conversations that may be helpful for the current query:
+
+${projectContext.semanticMemory}
+</semantic_memory>`;
+      }
+
+      // Add relevant conversation snippets from vector search
+      if (projectContext.relevantConversations) {
+        base += `\n\n<relevant_past_conversations>
+These excerpts from previous conversations may provide helpful context:
+
+${projectContext.relevantConversations}
+</relevant_past_conversations>`;
       }
 
       // Add file manifest (awareness of available files)
@@ -402,12 +452,12 @@ ${filesContent}
   // Add conversation history
   for (const msg of history) {
     const content = [];
-    
+
     // Add text content
     if (msg.content) {
       content.push({ text: msg.content });
     }
-    
+
     // Add file attachments if present
     if (msg.files && msg.files.length > 0) {
       for (const file of msg.files) {
@@ -423,7 +473,7 @@ ${filesContent}
             content.push({
               document: {
                 format: getDocumentFormat(file.mediaType),
-                name: file.name,
+                name: sanitizeDocumentName(file.name),
                 source: { bytes: Buffer.from(file.base64, 'base64') }
               }
             });
@@ -432,17 +482,25 @@ ${filesContent}
       }
     }
 
-    messages.push({
-      role: msg.role,
-      content
-    });
+    // Ensure user messages always have content (Bedrock requires non-empty content)
+    // For empty user messages (e.g., file-only), add a placeholder to maintain structure
+    if (content.length === 0 && msg.role === 'user') {
+      content.push({ text: '[File uploaded]' });
+    }
+
+    // Only add message if it has content
+    if (content.length > 0) {
+      messages.push({
+        role: msg.role,
+        content
+      });
+    }
   }
 
   // Add current message
   const currentContent = [];
-  if (currentMessage.text) {
-    currentContent.push({ text: currentMessage.text });
-  }
+
+  // Add files first
   if (currentMessage.files && currentMessage.files.length > 0) {
     for (const file of currentMessage.files) {
       if (file.base64 && file.mediaType) {
@@ -460,7 +518,7 @@ ${filesContent}
           currentContent.push({
             document: {
               format: getDocumentFormat(file.mediaType),
-              name: file.name,
+              name: sanitizeDocumentName(file.name),
               source: { bytes: Buffer.from(file.base64, 'base64') }
             }
           });
@@ -468,11 +526,22 @@ ${filesContent}
       }
     }
   }
-  
-  messages.push({
-    role: 'user',
-    content: currentContent
-  });
+
+  // Add text content - if no text provided but files exist, add a default prompt
+  if (currentMessage.text) {
+    currentContent.push({ text: currentMessage.text });
+  } else if (currentContent.length > 0) {
+    // Files were added but no text - add a default prompt
+    currentContent.push({ text: 'Please analyze this document and provide a summary of its key contents.' });
+  }
+
+  // Ensure we have content before adding the message
+  if (currentContent.length > 0) {
+    messages.push({
+      role: 'user',
+      content: currentContent
+    });
+  }
 
   return messages;
 }
@@ -494,21 +563,58 @@ function getDocumentFormat(mediaType) {
 }
 
 /**
+ * Sanitize document name for Bedrock Converse API
+ * Bedrock only allows: alphanumeric, whitespace, hyphens, parentheses, square brackets
+ * No consecutive whitespace, no leading/trailing whitespace
+ * IMPORTANT: The 'name' field must NOT include file extension - extension is in 'format' field
+ */
+function sanitizeDocumentName(name) {
+  if (!name) return 'document';
+
+  // Remove extension - Bedrock's 'name' field doesn't allow dots
+  // The format is specified separately in the 'format' field
+  const lastDot = name.lastIndexOf('.');
+  let baseName = lastDot > 0 ? name.substring(0, lastDot) : name;
+
+  // Replace invalid characters with hyphens (keep alphanumeric, spaces, hyphens, (), [])
+  baseName = baseName.replace(/[^a-zA-Z0-9\s\-\(\)\[\]]/g, '-');
+
+  // Replace multiple consecutive whitespace with single space
+  baseName = baseName.replace(/\s+/g, ' ');
+
+  // Replace multiple consecutive hyphens with single hyphen
+  baseName = baseName.replace(/-+/g, '-');
+
+  // Trim whitespace and hyphens from start/end
+  baseName = baseName.replace(/^[\s-]+|[\s-]+$/g, '');
+
+  // Ensure we have a valid name
+  if (!baseName) baseName = 'document';
+
+  // Limit length (Bedrock has a limit of 200, being conservative with 100)
+  if (baseName.length > 100) {
+    baseName = baseName.substring(0, 100).replace(/[\s-]+$/, '');
+  }
+
+  return baseName;
+}
+
+/**
  * Stream chat completion with extended thinking support
  */
 async function* streamChat(options) {
   const {
     messages,
-    model = 'sonnet',
+    model = 'haiku',
     systemPrompt,
-    maxTokens = 8192,
+    maxTokens = 16384,
     extendedThinking = false,
     thinkingBudget = 10000,
     webSearch = false,
     mcpServers = []
   } = options;
 
-  const modelId = MODELS[model] || MODELS.sonnet;
+  const modelId = MODELS[model] || MODELS.haiku;
 
   const commandParams = {
     modelId,
@@ -660,8 +766,8 @@ async function extractKeyPoints(messages) {
  * @param {string} model - Model being used (for context limits)
  * @returns {Object} Compaction result with recent messages and summarized context
  */
-async function compactConversation(messages, cachedSummary = null, model = 'sonnet') {
-  const contextLimit = CONTEXT_LIMITS[model] || CONTEXT_LIMITS.sonnet;
+async function compactConversation(messages, cachedSummary = null, model = 'haiku') {
+  const contextLimit = CONTEXT_LIMITS[model] || CONTEXT_LIMITS.haiku;
   const thresholdTokens = contextLimit * COMPACTION_THRESHOLD;
   const targetTokens = contextLimit * COMPACTION_TARGET;
 
@@ -761,9 +867,9 @@ async function compactConversation(messages, cachedSummary = null, model = 'sonn
 async function* streamChatWithTools(options) {
   const {
     messages: initialMessages,
-    model = 'sonnet',
+    model = 'haiku',
     systemPrompt,
-    maxTokens = 8192,
+    maxTokens = 16384,
     extendedThinking = false,
     thinkingBudget = 10000,
     webSearch = false,
@@ -771,7 +877,7 @@ async function* streamChatWithTools(options) {
     onSearchResults = null
   } = options;
 
-  const modelId = MODELS[model] || MODELS.sonnet;
+  const modelId = MODELS[model] || MODELS.haiku;
   let messages = [...initialMessages];
   let continueLoop = true;
   let loopCount = 0;

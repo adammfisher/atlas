@@ -4,15 +4,33 @@
   "description": "Enterprise AI research interface with AWS Lambda + Bedrock backend.",
   "main": "local-server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "playwright test",
+    "test:e2e": "playwright test tests/e2e/",
+    "test:regression": "playwright test tests/e2e/regression.spec.js",
+    "test:smoke": "playwright test tests/e2e/regression.spec.js --grep 'SMOKE TEST'",
+    "test:auth": "playwright test tests/e2e/auth.spec.js",
+    "test:chat": "playwright test tests/e2e/chat.spec.js",
+    "test:artifacts": "playwright test tests/e2e/artifacts.spec.js",
+    "test:projects": "playwright test tests/e2e/projects.spec.js",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report test-results/html-report"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.958.0",
+    "@aws-sdk/client-dynamodb": "^3.967.0",
+    "@aws-sdk/client-lambda": "^3.968.0",
+    "@aws-sdk/lib-dynamodb": "^3.967.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "express": "^5.2.1",
+    "nanoid": "^5.1.6",
     "neo4j-driver": "^6.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
   }
 }

@@ -4,6 +4,7 @@ resource "aws_lambda_layer_version" "common" {
   layer_name          = "${var.project_name}-common-layer"
   compatible_runtimes = ["nodejs20.x"]
   description         = "Common dependencies for Atlas Lambda functions"
+  source_code_hash    = filebase64sha256("${path.module}/../lambda/layers/common.zip")
 }
 
 # Chat function (non-streaming handler)
@@ -30,8 +31,10 @@ resource "aws_lambda_function" "chat" {
       SUMMARIES_TABLE       = aws_dynamodb_table.summaries.name
       UPLOADS_BUCKET        = aws_s3_bucket.uploads.id
       ARTIFACTS_BUCKET      = aws_s3_bucket.artifacts.id
+      VECTORS_BUCKET        = local.vectors_bucket_name
       NEO4J_URL             = var.neo4j_url
       OPENSEARCH_URL        = var.opensearch_url
+      JWT_SECRET            = data.aws_ssm_parameter.jwt_secret.value
     }
   }
 }
@@ -60,8 +63,10 @@ resource "aws_lambda_function" "chat_stream" {
       SUMMARIES_TABLE       = aws_dynamodb_table.summaries.name
       UPLOADS_BUCKET        = aws_s3_bucket.uploads.id
       ARTIFACTS_BUCKET      = aws_s3_bucket.artifacts.id
+      VECTORS_BUCKET        = local.vectors_bucket_name
       NEO4J_URL             = var.neo4j_url
       OPENSEARCH_URL        = var.opensearch_url
+      JWT_SECRET            = data.aws_ssm_parameter.jwt_secret.value
     }
   }
 }
@@ -73,10 +78,10 @@ resource "aws_lambda_function_url" "chat_stream" {
   invoke_mode        = "RESPONSE_STREAM"
 
   cors {
-    allow_origins     = ["*"]
+    allow_origins     = ["https://d2e9zue1tj9oj5.cloudfront.net", "http://localhost:3000"]
     allow_methods     = ["*"]
     allow_headers     = ["*"]
-    allow_credentials = false
+    allow_credentials = true
     max_age           = 86400
   }
 }
@@ -100,6 +105,7 @@ resource "aws_lambda_function" "sessions" {
       MESSAGES_TABLE   = aws_dynamodb_table.messages.name
       ARTIFACTS_TABLE  = aws_dynamodb_table.artifacts.name
       ARTIFACTS_BUCKET = aws_s3_bucket.artifacts.id
+      JWT_SECRET       = data.aws_ssm_parameter.jwt_secret.value
     }
   }
 }
@@ -125,6 +131,8 @@ resource "aws_lambda_function" "projects" {
       SESSIONS_TABLE        = aws_dynamodb_table.sessions.name
       MESSAGES_TABLE        = aws_dynamodb_table.messages.name
       UPLOADS_BUCKET        = aws_s3_bucket.uploads.id
+      VECTORS_BUCKET        = local.vectors_bucket_name
+      JWT_SECRET            = data.aws_ssm_parameter.jwt_secret.value
     }
   }
 }
@@ -146,6 +154,7 @@ resource "aws_lambda_function" "files" {
     variables = {
       UPLOADS_BUCKET   = aws_s3_bucket.uploads.id
       ARTIFACTS_BUCKET = aws_s3_bucket.artifacts.id
+      JWT_SECRET       = data.aws_ssm_parameter.jwt_secret.value
     }
   }
 }
@@ -166,6 +175,7 @@ resource "aws_lambda_function" "mcp_config" {
   environment {
     variables = {
       MCP_CONFIGS_TABLE = aws_dynamodb_table.mcp_configs.name
+      JWT_SECRET        = data.aws_ssm_parameter.jwt_secret.value
     }
   }
 }
@@ -187,6 +197,7 @@ resource "aws_lambda_function" "artifacts" {
     variables = {
       ARTIFACTS_TABLE  = aws_dynamodb_table.artifacts.name
       ARTIFACTS_BUCKET = aws_s3_bucket.artifacts.id
+      JWT_SECRET       = data.aws_ssm_parameter.jwt_secret.value
     }
   }
 }
@@ -238,4 +249,58 @@ resource "aws_lambda_permission" "artifacts_api" {
   function_name = aws_lambda_function.artifacts.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+# Auth function
+resource "aws_lambda_function" "auth" {
+  filename         = "${path.module}/../lambda/functions/auth.zip"
+  function_name    = "${var.project_name}-auth"
+  role             = aws_iam_role.lambda_execution.arn
+  handler          = "index.handler"
+  source_code_hash = filebase64sha256("${path.module}/../lambda/functions/auth.zip")
+  runtime          = "nodejs20.x"
+  timeout          = 30
+  memory_size      = 256
+
+  layers = [aws_lambda_layer_version.common.arn]
+
+  environment {
+    variables = {
+      USERS_TABLE = aws_dynamodb_table.users.name
+      JWT_SECRET  = data.aws_ssm_parameter.jwt_secret.value
+      CORS_ORIGIN = var.cors_origin
+    }
+  }
+}
+
+resource "aws_lambda_permission" "auth_api" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.auth.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+# Memory Processor function (background processing for vector memory)
+resource "aws_lambda_function" "memory_processor" {
+  filename         = "${path.module}/../lambda/functions/memory-processor.zip"
+  function_name    = "${var.project_name}-memory-processor"
+  role             = aws_iam_role.lambda_execution.arn
+  handler          = "index.handler"
+  source_code_hash = filebase64sha256("${path.module}/../lambda/functions/memory-processor.zip")
+  runtime          = "nodejs20.x"
+  timeout          = 300 # 5 minutes for processing large conversations
+  memory_size      = 1024
+
+  layers = [aws_lambda_layer_version.common.arn]
+
+  environment {
+    variables = {
+      SESSIONS_TABLE   = aws_dynamodb_table.sessions.name
+      MESSAGES_TABLE   = aws_dynamodb_table.messages.name
+      PROJECTS_TABLE   = aws_dynamodb_table.projects.name
+      VECTORS_BUCKET   = local.vectors_bucket_name
+      JWT_SECRET       = data.aws_ssm_parameter.jwt_secret.value
+    }
+  }
 }

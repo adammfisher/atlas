@@ -127,6 +127,48 @@ function getContentType(filename) {
   return types[ext] || 'application/octet-stream';
 }
 
+/**
+ * Generate user-scoped path for project uploads
+ * IMPORTANT: Use this for ALL project file uploads to ensure user isolation
+ * @param {string} userId - User ID from JWT
+ * @param {string} projectId - Project ID
+ * @param {string} fileId - File ID
+ * @param {string} filename - Original filename
+ * @returns {string} S3 key path
+ */
+function getUserUploadPath(userId, projectId, fileId, filename) {
+  return `users/${userId}/projects/${projectId}/${fileId}-${filename}`;
+}
+
+/**
+ * Generate user-scoped path for session artifacts
+ * IMPORTANT: Use this for ALL artifact uploads to ensure user isolation
+ * @param {string} userId - User ID from JWT
+ * @param {string} sessionId - Session ID
+ * @param {string} artifactId - Artifact ID
+ * @returns {string} S3 key path
+ */
+function getUserArtifactPath(userId, sessionId, artifactId) {
+  return `users/${userId}/sessions/${sessionId}/${artifactId}`;
+}
+
+/**
+ * Validate that a user has access to a given S3 path
+ * Returns true if the path belongs to the user
+ * @param {string} path - S3 key path
+ * @param {string} userId - User ID from JWT
+ * @returns {boolean}
+ */
+function validateUserPath(path, userId) {
+  // New user-scoped paths start with users/{userId}/
+  if (path.startsWith(`users/${userId}/`)) {
+    return true;
+  }
+  // Legacy paths (before auth) - may not have user prefix
+  // TODO: Migrate legacy data to user-scoped paths
+  return false;
+}
+
 module.exports = {
   getUploadUrl,
   getDownloadUrl,
@@ -135,5 +177,8 @@ module.exports = {
   getContentAsBuffer,
   deleteObject,
   deleteContent: deleteObject, // Alias for consistency
-  getContentType
+  getContentType,
+  getUserUploadPath,
+  getUserArtifactPath,
+  validateUserPath
 };

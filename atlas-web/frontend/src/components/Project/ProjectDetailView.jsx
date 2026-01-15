@@ -44,6 +44,12 @@ function ProjectDetailView() {
   const [instructions, setInstructions] = useState('')
   const [editingInstructions, setEditingInstructions] = useState('')
 
+  // Memory editing
+  const [editingMemory, setEditingMemory] = useState(null) // { factId, content, category }
+  const [newMemoryContent, setNewMemoryContent] = useState('')
+  const [showAddMemory, setShowAddMemory] = useState(false)
+  const [memoryOperationLoading, setMemoryOperationLoading] = useState(false)
+
   // New chat input
   const [chatInput, setChatInput] = useState('')
   // Model selection disabled - using Haiku as default
@@ -52,7 +58,7 @@ function ProjectDetailView() {
   // const [showModelDropdown, setShowModelDropdown] = useState(false)
   // const modelDropdownRef = useRef(null)
 
-  const { updateProject, sessions, deleteProject, addSession, setCurrentSession } = useChatStore()
+  const { updateProject, sessions, deleteProject, deleteSession, addSession, setCurrentSession, projectMemoryContext, setProjectMemoryContext } = useChatStore()
 
   // Get chats for this project
   const projectChats = useMemo(() => {
@@ -185,6 +191,20 @@ function ProjectDetailView() {
     }
   }
 
+  const handleDeleteChat = async (e, chatId) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!window.confirm('Are you sure you want to delete this chat? This action cannot be undone.')) {
+      return
+    }
+    try {
+      await projectsService.deleteChat(projectId, chatId)
+      deleteSession(chatId)
+    } catch (err) {
+      console.error('Failed to delete chat:', err)
+    }
+  }
+
   const formatTimeAgo = (dateStr) => {
     if (!dateStr) return ''
     const date = new Date(dateStr)
@@ -196,6 +216,79 @@ function ProjectDetailView() {
     if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
     if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
     return 'Just now'
+  }
+
+  // Memory handlers
+  const handleDeleteMemory = async (factId) => {
+    if (!window.confirm('Delete this memory?')) return
+    setMemoryOperationLoading(true)
+    try {
+      await projectsService.deleteSemanticMemory(projectId, factId)
+      // Update local state
+      const memContext = projectMemoryContext[projectId]
+      if (memContext) {
+        setProjectMemoryContext(projectId, {
+          ...memContext,
+          memories: (memContext.memories || []).filter(m => m.factId !== factId),
+          semanticMemoryCount: Math.max(0, (memContext.semanticMemoryCount || 0) - 1)
+        })
+      }
+    } catch (err) {
+      console.error('Failed to delete memory:', err)
+    } finally {
+      setMemoryOperationLoading(false)
+    }
+  }
+
+  const handleUpdateMemory = async () => {
+    if (!editingMemory || !editingMemory.content.trim()) return
+    setMemoryOperationLoading(true)
+    try {
+      await projectsService.updateSemanticMemory(projectId, editingMemory.factId, editingMemory.content, editingMemory.category)
+      // Update local state
+      const memContext = projectMemoryContext[projectId]
+      if (memContext) {
+        setProjectMemoryContext(projectId, {
+          ...memContext,
+          memories: (memContext.memories || []).map(m =>
+            m.factId === editingMemory.factId ? { ...m, content: editingMemory.content, category: editingMemory.category } : m
+          )
+        })
+      }
+      setEditingMemory(null)
+    } catch (err) {
+      console.error('Failed to update memory:', err)
+    } finally {
+      setMemoryOperationLoading(false)
+    }
+  }
+
+  const handleAddMemory = async () => {
+    if (!newMemoryContent.trim()) return
+    setMemoryOperationLoading(true)
+    try {
+      const result = await projectsService.addSemanticMemory(projectId, newMemoryContent, 'general')
+      // Update local state
+      const memContext = projectMemoryContext[projectId] || { memories: [], conversations: [], semanticMemoryCount: 0, relevantConversationsCount: 0 }
+      const newMemory = {
+        factId: result.factId,
+        content: newMemoryContent,
+        category: 'general',
+        confidence: 1.0,
+        score: 1.0
+      }
+      setProjectMemoryContext(projectId, {
+        ...memContext,
+        memories: [newMemory, ...(memContext.memories || [])],
+        semanticMemoryCount: (memContext.semanticMemoryCount || 0) + 1
+      })
+      setNewMemoryContent('')
+      setShowAddMemory(false)
+    } catch (err) {
+      console.error('Failed to add memory:', err)
+    } finally {
+      setMemoryOperationLoading(false)
+    }
   }
 
   // Calculate file capacity
@@ -342,18 +435,30 @@ function ProjectDetailView() {
             ) : (
               <div className="space-y-1">
                 {projectChats.map(chat => (
-                  <Link
+                  <div
                     key={chat.id}
-                    to={`/project/${projectId}/chat/${chat.id}`}
-                    className="block p-3 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors"
+                    className="group flex items-center gap-2 p-3 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors"
                   >
-                    <p className="text-sm truncate" style={{ color: 'var(--text-primary)' }}>
-                      {chat.title || 'New conversation'}
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                      Last message {formatTimeAgo(chat.updatedAt || chat.createdAt)}
-                    </p>
-                  </Link>
+                    <Link
+                      to={`/project/${projectId}/chat/${chat.id}`}
+                      className="flex-1 min-w-0"
+                    >
+                      <p className="text-sm truncate" style={{ color: 'var(--text-primary)' }}>
+                        {chat.title || 'New conversation'}
+                      </p>
+                      <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                        Last message {formatTimeAgo(chat.updatedAt || chat.createdAt)}
+                      </p>
+                    </Link>
+                    <button
+                      onClick={(e) => handleDeleteChat(e, chat.id)}
+                      className="p-1.5 rounded opacity-0 group-hover:opacity-100 hover:bg-[var(--bg-tertiary)] transition-all"
+                      style={{ color: 'var(--text-muted)' }}
+                      title="Delete chat"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -380,14 +485,53 @@ function ProjectDetailView() {
                 </button>
               </div>
             </div>
-            <p className="text-sm line-clamp-3" style={{ color: 'var(--text-muted)' }}>
-              {memory?.purposeContext || 'No memory yet. Start chatting to build project memory.'}
-            </p>
-            {memory?.updatedAt && (
-              <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
-                Last updated {formatTimeAgo(memory.updatedAt)}
-              </p>
-            )}
+            {(() => {
+              const memContext = projectMemoryContext[projectId]
+              if (memContext && (memContext.semanticMemoryCount > 0 || memContext.relevantConversationsCount > 0)) {
+                return (
+                  <>
+                    <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                      {memContext.semanticMemoryCount} semantic {memContext.semanticMemoryCount === 1 ? 'memory' : 'memories'}
+                      {memContext.relevantConversationsCount > 0 && (
+                        <>, {memContext.relevantConversationsCount} {memContext.relevantConversationsCount === 1 ? 'conversation' : 'conversations'}</>
+                      )}
+                    </p>
+                    {/* Preview first few memories */}
+                    {memContext.memories?.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {memContext.memories.slice(0, 3).map((mem, idx) => (
+                          <p key={idx} className="text-xs line-clamp-1" style={{ color: 'var(--text-muted)' }}>
+                            • {mem.content}
+                          </p>
+                        ))}
+                        {memContext.memories.length > 3 && (
+                          <p className="text-xs" style={{ color: 'var(--accent-color)' }}>
+                            +{memContext.memories.length - 3} more
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {memContext.lastUpdated && (
+                      <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                        Last retrieved {formatTimeAgo(memContext.lastUpdated)}
+                      </p>
+                    )}
+                  </>
+                )
+              }
+              return (
+                <>
+                  <p className="text-sm line-clamp-3" style={{ color: 'var(--text-muted)' }}>
+                    {memory?.purposeContext || 'No memory yet. Start chatting to build project memory.'}
+                  </p>
+                  {memory?.updatedAt && (
+                    <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                      Last updated {formatTimeAgo(memory.updatedAt)}
+                    </p>
+                  )}
+                </>
+              )
+            })()}
           </div>
 
           {/* Instructions Section */}
@@ -490,10 +634,10 @@ function ProjectDetailView() {
       {showMemoryModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div
-            className="w-full max-w-2xl max-h-[80vh] overflow-y-auto rounded-2xl"
+            className="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-2xl"
             style={{ backgroundColor: 'var(--bg-secondary)' }}
           >
-            <div className="sticky top-0 flex items-center justify-between p-6 border-b" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
+            <div className="sticky top-0 flex items-center justify-between p-6 border-b" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', zIndex: 10 }}>
               <h2 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>
                 Manage project memory
               </h2>
@@ -506,96 +650,256 @@ function ProjectDetailView() {
               </button>
             </div>
             <div className="p-6">
-              <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
-                Claude regenerates project memory every evening from your past chats in this project. Only you can see this memory, and it is not shared with other project users.
-              </p>
-
-              {/* Memory Sections */}
-              <div className="space-y-6">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      Purpose & context
-                    </h3>
-                    <button className="p-1 rounded hover:bg-[var(--bg-tertiary)]" style={{ color: 'var(--text-muted)' }}>
-                      <Pencil size={14} />
-                    </button>
-                  </div>
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    {memory?.purposeContext || 'No content yet'}
-                  </p>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      Current state
-                    </h3>
-                    <button className="p-1 rounded hover:bg-[var(--bg-tertiary)]" style={{ color: 'var(--text-muted)' }}>
-                      <Pencil size={14} />
-                    </button>
-                  </div>
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    {memory?.currentState || 'No content yet'}
-                  </p>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      On the horizon
-                    </h3>
-                    <button className="p-1 rounded hover:bg-[var(--bg-tertiary)]" style={{ color: 'var(--text-muted)' }}>
-                      <Pencil size={14} />
-                    </button>
-                  </div>
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    {memory?.onTheHorizon || 'No content yet'}
-                  </p>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      Key learnings
-                    </h3>
-                    <button className="p-1 rounded hover:bg-[var(--bg-tertiary)]" style={{ color: 'var(--text-muted)' }}>
-                      <Pencil size={14} />
-                    </button>
-                  </div>
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    {memory?.keyLearnings || 'No content yet'}
-                  </p>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      Approach & patterns
-                    </h3>
-                    <button className="p-1 rounded hover:bg-[var(--bg-tertiary)]" style={{ color: 'var(--text-muted)' }}>
-                      <Pencil size={14} />
-                    </button>
-                  </div>
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    {memory?.approachPatterns || 'No content yet'}
-                  </p>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      Tools & resources
-                    </h3>
-                    <button className="p-1 rounded hover:bg-[var(--bg-tertiary)]" style={{ color: 'var(--text-muted)' }}>
-                      <Pencil size={14} />
-                    </button>
-                  </div>
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    {memory?.toolsResources || 'No content yet'}
-                  </p>
-                </div>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  Memory is automatically extracted from conversations. You can also add, edit, or delete memories.
+                </p>
+                <button
+                  onClick={() => setShowAddMemory(!showAddMemory)}
+                  className="px-3 py-1.5 text-sm rounded-lg flex items-center gap-1"
+                  style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+                >
+                  <Plus size={14} />
+                  Add
+                </button>
               </div>
+
+              {/* Add New Memory Form */}
+              {showAddMemory && (
+                <div className="mb-6 p-4 rounded-lg" style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)' }}>
+                  <h4 className="text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Add a memory</h4>
+                  <textarea
+                    value={newMemoryContent}
+                    onChange={(e) => setNewMemoryContent(e.target.value)}
+                    placeholder="Enter a fact or piece of information about this project..."
+                    className="w-full p-3 rounded-lg text-sm resize-none"
+                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+                    rows={3}
+                  />
+                  <div className="flex items-center justify-end gap-2 mt-3">
+                    <button
+                      onClick={() => { setShowAddMemory(false); setNewMemoryContent(''); }}
+                      className="px-3 py-1.5 text-sm rounded"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddMemory}
+                      disabled={!newMemoryContent.trim() || memoryOperationLoading}
+                      className="px-4 py-1.5 text-sm rounded bg-[#CD477E] text-white disabled:opacity-50"
+                    >
+                      {memoryOperationLoading ? 'Adding...' : 'Add Memory'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Semantic Memories Section */}
+              {(() => {
+                const memContext = projectMemoryContext[projectId]
+                const memories = memContext?.memories || []
+                const conversations = memContext?.conversations || []
+
+                if (memories.length === 0 && conversations.length === 0 && !memory && !showAddMemory) {
+                  return (
+                    <div className="text-center py-8">
+                      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                        No memories yet. Start chatting or add memories manually.
+                      </p>
+                    </div>
+                  )
+                }
+
+                // Group memories by category
+                const memoriesByCategory = memories.reduce((acc, mem) => {
+                  const cat = mem.category || 'general'
+                  if (!acc[cat]) acc[cat] = []
+                  acc[cat].push(mem)
+                  return acc
+                }, {})
+
+                return (
+                  <div className="space-y-6">
+                    {/* Semantic Memories */}
+                    {Object.entries(memoriesByCategory).map(([category, categoryMemories]) => (
+                      <div key={category}>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-medium capitalize" style={{ color: 'var(--text-primary)' }}>
+                            {category.replace(/_/g, ' ')}
+                          </h3>
+                          <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                            {categoryMemories.length} {categoryMemories.length === 1 ? 'memory' : 'memories'}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {categoryMemories.map((mem, idx) => (
+                            <div
+                              key={mem.factId || idx}
+                              className="group p-3 rounded-lg"
+                              style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)' }}
+                            >
+                              {editingMemory?.factId === mem.factId ? (
+                                // Edit mode
+                                <div className="space-y-3">
+                                  <textarea
+                                    value={editingMemory.content}
+                                    onChange={(e) => setEditingMemory({ ...editingMemory, content: e.target.value })}
+                                    className="w-full p-2 rounded text-sm resize-none"
+                                    style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+                                    rows={3}
+                                    autoFocus
+                                  />
+                                  <div className="flex items-center gap-2 justify-end">
+                                    <button
+                                      onClick={() => setEditingMemory(null)}
+                                      className="px-3 py-1.5 text-xs rounded"
+                                      style={{ color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      onClick={handleUpdateMemory}
+                                      disabled={memoryOperationLoading}
+                                      className="px-3 py-1.5 text-xs rounded bg-[#CD477E] text-white"
+                                    >
+                                      {memoryOperationLoading ? 'Saving...' : 'Save'}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                // Display mode
+                                <div className="flex items-start gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
+                                      {mem.content}
+                                    </p>
+                                    <div className="flex items-center gap-3 mt-2">
+                                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                        Score: {(mem.score * 100).toFixed(0)}%
+                                      </span>
+                                      {mem.confidence && (
+                                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                          Confidence: {(mem.confidence * 100).toFixed(0)}%
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => setEditingMemory({ factId: mem.factId, content: mem.content, category: mem.category || 'general' })}
+                                      className="p-1.5 rounded hover:bg-[var(--bg-tertiary)]"
+                                      style={{ color: 'var(--text-muted)' }}
+                                      title="Edit memory"
+                                    >
+                                      <Pencil size={14} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteMemory(mem.factId)}
+                                      disabled={memoryOperationLoading}
+                                      className="p-1.5 rounded hover:bg-[var(--bg-tertiary)]"
+                                      style={{ color: 'var(--text-muted)' }}
+                                      title="Delete memory"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Relevant Conversations */}
+                    {conversations.length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                            Relevant Conversations
+                          </h3>
+                          <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                            {conversations.length} {conversations.length === 1 ? 'snippet' : 'snippets'}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {conversations.map((conv, idx) => (
+                            <div
+                              key={idx}
+                              className="p-3 rounded-lg"
+                              style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)' }}
+                            >
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-xs font-medium capitalize px-2 py-0.5 rounded" style={{
+                                  backgroundColor: conv.role === 'user' ? 'var(--accent-color)' : 'var(--bg-tertiary)',
+                                  color: conv.role === 'user' ? 'white' : 'var(--text-muted)'
+                                }}>
+                                  {conv.role}
+                                </span>
+                                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                  Score: {(conv.score * 100).toFixed(0)}%
+                                </span>
+                              </div>
+                              <p className="text-sm line-clamp-3" style={{ color: 'var(--text-primary)' }}>
+                                {conv.contentPreview}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Legacy Memory Sections (if no semantic memories) */}
+                    {memories.length === 0 && memory && (
+                      <>
+                        <div className="pt-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
+                          <h3 className="text-sm font-medium mb-4" style={{ color: 'var(--text-primary)' }}>
+                            Legacy Memory
+                          </h3>
+                        </div>
+                        {memory.purposeContext && (
+                          <div>
+                            <h4 className="text-xs font-medium mb-2 uppercase" style={{ color: 'var(--text-muted)' }}>
+                              Purpose & Context
+                            </h4>
+                            <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
+                              {memory.purposeContext}
+                            </p>
+                          </div>
+                        )}
+                        {memory.currentState && (
+                          <div>
+                            <h4 className="text-xs font-medium mb-2 uppercase" style={{ color: 'var(--text-muted)' }}>
+                              Current State
+                            </h4>
+                            <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
+                              {memory.currentState}
+                            </p>
+                          </div>
+                        )}
+                        {memory.keyLearnings && (
+                          <div>
+                            <h4 className="text-xs font-medium mb-2 uppercase" style={{ color: 'var(--text-muted)' }}>
+                              Key Learnings
+                            </h4>
+                            <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
+                              {memory.keyLearnings}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Last Updated Info */}
+                    {memContext?.lastUpdated && (
+                      <p className="text-xs pt-4 text-center" style={{ color: 'var(--text-muted)' }}>
+                        Memory last retrieved {formatTimeAgo(memContext.lastUpdated)}
+                      </p>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           </div>
         </div>

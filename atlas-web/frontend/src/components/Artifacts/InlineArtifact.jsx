@@ -1,5 +1,67 @@
 import React from 'react'
-import { Code, Download, AlertTriangle } from 'lucide-react'
+import { Code, Download, AlertTriangle, Sparkles } from 'lucide-react'
+
+// Streaming artifact card - shows during artifact creation with yellow/orange styling
+export function StreamingArtifactCard({ artifact, onOpenInPanel }) {
+  const getTypeLabel = () => {
+    const labels = {
+      '.html': 'HTML',
+      '.svg': 'SVG',
+      '.md': 'Markdown',
+      '.mermaid': 'Diagram',
+      '.jsx': 'React',
+      '.json': 'JSON',
+      '.css': 'CSS',
+      '.js': 'JavaScript',
+      '.py': 'Python'
+    }
+    return labels[artifact?.file_extension] || artifact?.type?.toUpperCase() || 'Code'
+  }
+
+  return (
+    <div
+      className="my-4 rounded-xl overflow-hidden border cursor-pointer transition-all animate-pulse"
+      style={{
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        borderColor: '#f59e0b',
+        borderWidth: '2px'
+      }}
+      onClick={() => onOpenInPanel?.(artifact)}
+    >
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-3">
+          {/* Sparkles icon with animation */}
+          <div
+            className="w-10 h-10 rounded-lg flex items-center justify-center"
+            style={{ backgroundColor: 'rgba(245, 158, 11, 0.2)' }}
+          >
+            <Sparkles size={20} style={{ color: '#f59e0b' }} className="animate-pulse" />
+          </div>
+          {/* Title and type */}
+          <div>
+            <div className="text-sm font-medium" style={{ color: '#f59e0b' }}>
+              {artifact?.title || artifact?.name || 'Creating artifact...'}
+            </div>
+            <div className="text-xs" style={{ color: '#d97706' }}>
+              Building · {getTypeLabel()}
+            </div>
+          </div>
+        </div>
+        {/* Building indicator */}
+        <div
+          className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
+          style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.2)',
+            color: '#f59e0b'
+          }}
+        >
+          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          Building...
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Simple inline artifact card - clicking opens in the right panel
 function InlineArtifact({ artifact, onOpenInPanel }) {
@@ -187,6 +249,19 @@ const typeToExtension = {
   'py': '.py'
 }
 
+// Generate a stable hash for artifact identification based on title and type
+// This helps with matching artifacts across re-parses and updates
+function generateArtifactHash(title, type) {
+  const normalized = `${(title || '').toLowerCase().trim()}_${type}`.replace(/\s+/g, '_')
+  let hash = 0
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // Convert to 32bit integer
+  }
+  return `art_${Math.abs(hash).toString(36)}`
+}
+
 // Type to display name mapping
 const typeToName = {
   'html': 'HTML Document',
@@ -205,10 +280,17 @@ const typeToName = {
 }
 
 // Parse message content and extract artifacts
-export function parseMessageForArtifacts(content) {
+// Now uses stable IDs based on title+type for better artifact updating
+export function parseMessageForArtifacts(content, existingArtifacts = []) {
   const artifacts = []
   let modifiedContent = content
-  let artifactIndex = 0
+
+  // Build a map of existing artifacts by their stable ID for version tracking
+  const existingByStableId = new Map()
+  existingArtifacts.forEach(a => {
+    const stableId = generateArtifactHash(a.title || a.name, a.type)
+    existingByStableId.set(stableId, a)
+  })
 
   // NEW: Parse <artifact> tags first (preferred format)
   // Match: <artifact type="TYPE" title="TITLE">CONTENT</artifact>
@@ -221,12 +303,16 @@ export function parseMessageForArtifacts(content) {
     const artifactContent = tagMatch[3].trim()
 
     if (artifactContent.length > 50) {
-      const artifactId = `inline_art_${Date.now()}_${artifactIndex++}`
-      const ext = typeToExtension[type] || '.txt'
       const normalizedType = type === 'md' ? 'markdown' : (type === 'js' ? 'javascript' : type)
+      const ext = typeToExtension[type] || '.txt'
+      // Generate stable ID based on title and type
+      const stableId = generateArtifactHash(title, normalizedType)
+      const existing = existingByStableId.get(stableId)
+      // Increment version if updating existing artifact
+      const version = existing ? (existing.version || 1) + 1 : 1
 
       artifacts.push({
-        id: artifactId,
+        id: stableId,
         name: title,
         title: title,
         type: normalizedType,
@@ -234,12 +320,13 @@ export function parseMessageForArtifacts(content) {
         content: artifactContent,
         renderable: true,
         incomplete: false,
-        version: 1,
-        created_at: new Date().toISOString(),
+        version: version,
+        created_at: existing?.created_at || new Date().toISOString(),
+        updated_at: version > 1 ? new Date().toISOString() : undefined,
         size: artifactContent.length,
-        placeholder: `__ARTIFACT_${artifactId}__`
+        placeholder: `__ARTIFACT_${stableId}__`
       })
-      modifiedContent = modifiedContent.replace(tagMatch[0], `__ARTIFACT_${artifactId}__`)
+      modifiedContent = modifiedContent.replace(tagMatch[0], `__ARTIFACT_${stableId}__`)
     }
   }
 
@@ -253,12 +340,15 @@ export function parseMessageForArtifacts(content) {
     const artifactContent = incompleteTagMatch[3].trim()
 
     if (artifactContent.length > 100) {
-      const artifactId = `inline_art_${Date.now()}_${artifactIndex++}`
-      const ext = typeToExtension[type] || '.txt'
       const normalizedType = type === 'md' ? 'markdown' : (type === 'js' ? 'javascript' : type)
+      const ext = typeToExtension[type] || '.txt'
+      // Generate stable ID based on title and type
+      const stableId = generateArtifactHash(title, normalizedType)
+      const existing = existingByStableId.get(stableId)
+      const version = existing ? (existing.version || 1) + 1 : 1
 
       artifacts.push({
-        id: artifactId,
+        id: stableId,
         name: title,
         title: title + ' (Incomplete)',
         type: normalizedType,
@@ -266,12 +356,13 @@ export function parseMessageForArtifacts(content) {
         content: artifactContent,
         renderable: true,
         incomplete: true,
-        version: 1,
-        created_at: new Date().toISOString(),
+        version: version,
+        created_at: existing?.created_at || new Date().toISOString(),
+        updated_at: version > 1 ? new Date().toISOString() : undefined,
         size: artifactContent.length,
-        placeholder: `__ARTIFACT_${artifactId}__`
+        placeholder: `__ARTIFACT_${stableId}__`
       })
-      modifiedContent = modifiedContent.replace(incompleteTagMatch[0], `__ARTIFACT_${artifactId}__`)
+      modifiedContent = modifiedContent.replace(incompleteTagMatch[0], `__ARTIFACT_${stableId}__`)
     }
   }
 
@@ -308,10 +399,14 @@ export function parseMessageForArtifacts(content) {
       const codeContent = match[1].trim()
       // Only create artifacts for substantial content (more than 100 chars)
       if (codeContent.length > 100) {
-        const artifactId = `inline_art_${Date.now()}_${artifactIndex++}`
         const extractedTitle = extractTitleFromContent(codeContent, pattern.type, pattern.name)
+        // Generate stable ID based on title and type
+        const stableId = generateArtifactHash(extractedTitle, pattern.type)
+        const existing = existingByStableId.get(stableId)
+        const version = existing ? (existing.version || 1) + 1 : 1
+
         artifacts.push({
-          id: artifactId,
+          id: stableId,
           name: extractedTitle,
           title: extractedTitle,
           type: pattern.type,
@@ -319,12 +414,13 @@ export function parseMessageForArtifacts(content) {
           content: codeContent,
           renderable: true,
           incomplete: false,
-          version: 1,
-          created_at: new Date().toISOString(),
+          version: version,
+          created_at: existing?.created_at || new Date().toISOString(),
+          updated_at: version > 1 ? new Date().toISOString() : undefined,
           size: codeContent.length,
-          placeholder: `__ARTIFACT_${artifactId}__`
+          placeholder: `__ARTIFACT_${stableId}__`
         })
-        modifiedContent = modifiedContent.replace(match[0], `__ARTIFACT_${artifactId}__`)
+        modifiedContent = modifiedContent.replace(match[0], `__ARTIFACT_${stableId}__`)
       }
     }
   }
@@ -338,10 +434,14 @@ export function parseMessageForArtifacts(content) {
       const codeContent = match[1].trim()
       // Only create artifacts for substantial incomplete content (more than 200 chars)
       if (codeContent.length > 200) {
-        const artifactId = `inline_art_${Date.now()}_${artifactIndex++}`
         const extractedTitle = extractTitleFromContent(codeContent, pattern.type, pattern.name)
+        // Generate stable ID based on title and type
+        const stableId = generateArtifactHash(extractedTitle, pattern.type)
+        const existing = existingByStableId.get(stableId)
+        const version = existing ? (existing.version || 1) + 1 : 1
+
         artifacts.push({
-          id: artifactId,
+          id: stableId,
           name: extractedTitle,
           title: extractedTitle + ' (Incomplete)',
           type: pattern.type,
@@ -349,12 +449,13 @@ export function parseMessageForArtifacts(content) {
           content: codeContent,
           renderable: true,
           incomplete: true,
-          version: 1,
-          created_at: new Date().toISOString(),
+          version: version,
+          created_at: existing?.created_at || new Date().toISOString(),
+          updated_at: version > 1 ? new Date().toISOString() : undefined,
           size: codeContent.length,
-          placeholder: `__ARTIFACT_${artifactId}__`
+          placeholder: `__ARTIFACT_${stableId}__`
         })
-        modifiedContent = modifiedContent.replace(match[0], `__ARTIFACT_${artifactId}__`)
+        modifiedContent = modifiedContent.replace(match[0], `__ARTIFACT_${stableId}__`)
       }
     }
   }
@@ -363,6 +464,6 @@ export function parseMessageForArtifacts(content) {
 }
 
 // Export for use in ChatView
-export { extractTitleFromContent }
+export { extractTitleFromContent, generateArtifactHash }
 
 export default InlineArtifact
