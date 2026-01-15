@@ -83,15 +83,19 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
     console.log('[ArtifactsPanel] streamingArtifact effect:', streamingArtifact?.id, 'content length:', streamingArtifact?.content?.length)
 
     if (streamingArtifact) {
-      // We're actively streaming
+      // We're actively streaming - show source view so user can see code being written
       wasStreamingRef.current = true
       lastStreamingArtifactRef.current = streamingArtifact
+      setActiveTab('source')
       // Always update content when streaming artifact exists, even if content is empty string
       setArtifactContent(streamingArtifact.content || '')
     } else if (wasStreamingRef.current) {
       // Streaming just ended - streamingArtifact went from non-null to null
       console.log('[ArtifactsPanel] Streaming ended! wasStreaming:', wasStreamingRef.current, 'selectedArtifact:', selectedArtifact?.id)
       wasStreamingRef.current = false
+
+      // Switch back to preview view now that streaming is complete
+      setActiveTab('preview')
 
       // When streaming ends, the selectedArtifact should have the complete content
       // Use it directly if it has content, otherwise keep what we have from streaming

@@ -35,7 +35,11 @@ function MermaidRenderer({ content }) {
       try {
         setError(null)
         const id = `mermaid-${Date.now()}`
-        const { svg: renderedSvg } = await mermaid.render(id, content)
+        // Clean content - remove any stray artifact tags that might have been included
+        let cleanContent = content
+          .replace(/<\/?artifact[^>]*>/gi, '')
+          .trim()
+        const { svg: renderedSvg } = await mermaid.render(id, cleanContent)
         setSvg(renderedSvg)
       } catch (err) {
         console.error('Mermaid render error:', err)
