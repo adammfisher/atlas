@@ -83,10 +83,10 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
     console.log('[ArtifactsPanel] streamingArtifact effect:', streamingArtifact?.id, 'content length:', streamingArtifact?.content?.length)
 
     if (streamingArtifact) {
-      // We're actively streaming - show source view so user can see code being written
+      // We're actively streaming - show preview so user can see the rendered result building
       wasStreamingRef.current = true
       lastStreamingArtifactRef.current = streamingArtifact
-      setActiveTab('source')
+      setActiveTab('preview')
       // Always update content when streaming artifact exists, even if content is empty string
       setArtifactContent(streamingArtifact.content || '')
     } else if (wasStreamingRef.current) {
@@ -94,8 +94,7 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
       console.log('[ArtifactsPanel] Streaming ended! wasStreaming:', wasStreamingRef.current, 'selectedArtifact:', selectedArtifact?.id)
       wasStreamingRef.current = false
 
-      // Switch back to preview view now that streaming is complete
-      setActiveTab('preview')
+      // Stay on preview view (already there from streaming)
 
       // When streaming ends, the selectedArtifact should have the complete content
       // Use it directly if it has content, otherwise keep what we have from streaming
@@ -404,15 +403,8 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
       return <CodeRenderer content={artifactContent} fileExtension={displayArtifact?.file_extension} />
     }
 
-    // Formats that require complete content to parse - show raw code during streaming
-    const parseRequiredFormats = ['.json', '.csv', '.mermaid', '.slides']
-    const isParseRequired = parseRequiredFormats.includes(displayArtifact?.file_extension)
-
-    // During streaming, show raw code only for formats that need parsing
-    if (streamingArtifact && isParseRequired) {
-      return <CodeRenderer content={artifactContent} fileExtension={displayArtifact?.file_extension} />
-    }
-
+    // Render preview - all formats render during streaming now
+    // The renderers handle partial/incomplete content gracefully
     switch (displayArtifact?.file_extension) {
       case '.md':
         return <MarkdownRenderer content={artifactContent} fontFamily={fontFamily} />
