@@ -83,10 +83,12 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
     console.log('[ArtifactsPanel] streamingArtifact effect:', streamingArtifact?.id, 'content length:', streamingArtifact?.content?.length)
 
     if (streamingArtifact) {
-      // We're actively streaming - show preview so user can see the rendered result building
+      // We're actively streaming
       wasStreamingRef.current = true
       lastStreamingArtifactRef.current = streamingArtifact
-      setActiveTab('preview')
+      // Show preview for markdown (renders progressively), source for other formats
+      const isMd = streamingArtifact.file_extension === '.md' || streamingArtifact.type === 'markdown'
+      setActiveTab(isMd ? 'preview' : 'source')
       // Always update content when streaming artifact exists, even if content is empty string
       setArtifactContent(streamingArtifact.content || '')
     } else if (wasStreamingRef.current) {
@@ -94,7 +96,8 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
       console.log('[ArtifactsPanel] Streaming ended! wasStreaming:', wasStreamingRef.current, 'selectedArtifact:', selectedArtifact?.id)
       wasStreamingRef.current = false
 
-      // Stay on preview view (already there from streaming)
+      // IMPORTANT: Switch to preview view to show the rendered result
+      setActiveTab('preview')
 
       // When streaming ends, the selectedArtifact should have the complete content
       // Use it directly if it has content, otherwise keep what we have from streaming
