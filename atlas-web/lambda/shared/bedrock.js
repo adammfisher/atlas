@@ -184,12 +184,13 @@ function calculateHistoryTokens(messages) {
 }
 
 /**
- * Build system prompt with optional project context
+ * Build system prompt with optional project or global context
  * @param {Object|string} projectContext - Enhanced project context object or legacy instructions string
  * @param {boolean} webSearch - Whether web search is enabled
  * @param {Array} existingArtifacts - Array of existing artifacts in the conversation
+ * @param {Object} globalContext - Global (user-level) context for non-project chats
  */
-function buildSystemPrompt(projectContext = null, webSearch = false, existingArtifacts = []) {
+function buildSystemPrompt(projectContext = null, webSearch = false, existingArtifacts = [], globalContext = null) {
   let base = `You are a helpful AI research assistant for enterprise users. You help with:
 - Analyzing documents and data
 - Answering questions about business processes
@@ -208,6 +209,20 @@ Tools available:
 
 Formatting guidelines:
 - Simple tables, lists, and formatted text should be written directly in markdown (NOT in code blocks) so they render inline in the conversation.
+
+IMPORTANT - CONVERSATIONAL RESPONSES (ALWAYS FOLLOW):
+- ALWAYS provide introductory text BEFORE creating any artifact explaining what you're creating and why
+- ALWAYS provide helpful text AFTER the artifact with:
+  - A brief summary of what the artifact shows
+  - Key insights or highlights
+  - Suggested next steps or questions the user might have
+  - Any relevant tips or considerations
+- Never start OR end your response with just an artifact tag - always wrap artifacts with conversational text
+- Your response structure should be: [intro text] → [artifact] → [follow-up text with insights]
+- Example flow:
+  "I'll create a flowchart showing the authentication process:"
+  [artifact here]
+  "This diagram illustrates the 3-step authentication flow. Key points: 1) User credentials are validated first, 2) Session tokens expire after 24 hours. Would you like me to add error handling paths or detail any specific step?"
 
 ARTIFACT FORMAT (CRITICAL - ALWAYS FOLLOW THIS EXACTLY):
 When creating any artifact, document, diagram, or downloadable content, you MUST wrap it in <artifact> tags with proper attributes:
@@ -246,13 +261,20 @@ CRITICAL - ARTIFACT UPDATES:
 
    The user's request to "show top 30" or "add more items" means UPDATE the existing artifact, not create a new one.
 
+MERMAID DIAGRAM GUIDELINES:
+- Use simple node IDs (letters/numbers only, no spaces or special chars in IDs)
+- Put text labels in square brackets [] for rectangles, curly braces {} for diamonds
+- Avoid special characters in labels except basic punctuation
+- Use --> for arrows, -->|text| for labeled arrows
+- Start with graph TD (top-down) or graph LR (left-right)
+
 Examples:
 
 For a Mermaid diagram:
 <artifact type="mermaid" title="User Authentication Flow">
 graph TD
     A[User] --> B[Login Page]
-    B --> C{Valid Credentials?}
+    B --> C{Valid Credentials}
     C -->|Yes| D[Dashboard]
     C -->|No| E[Error Message]
 </artifact>
@@ -300,6 +322,31 @@ Example: User says "add more items to the diagram"
 ✓ CORRECT: <artifact type="mermaid" title="${existingArtifacts[0]?.title || 'AWS Multi-Tier Web Application Architecture'}">
 ✗ WRONG: <artifact type="mermaid" title="Updated AWS Architecture"> or any other variation
 </existing_artifacts>`;
+  }
+
+  // Add global memory context (only when NOT in a project)
+  if (!projectContext && globalContext) {
+    if (globalContext.globalMemory) {
+      base += `
+
+<user_memory>
+These are facts I've learned about you from our previous conversations. Apply this knowledge naturally without explicitly referencing "memory" or "past conversations" unless asked.
+
+${globalContext.globalMemory}
+</user_memory>`;
+    }
+
+    if (globalContext.globalConversations) {
+      base += `
+
+<relevant_past_conversations>
+These excerpts from previous conversations may provide helpful context:
+
+${globalContext.globalConversations}
+
+Use this context to inform your response, but don't reference "previous conversations" directly unless asked.
+</relevant_past_conversations>`;
+    }
   }
 
   // Handle enhanced project context (object) or legacy instructions (string)

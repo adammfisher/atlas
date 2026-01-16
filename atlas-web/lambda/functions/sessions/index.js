@@ -12,6 +12,14 @@ const {
 } = require('./shared/response');
 const { authenticateRequest, authErrorResponse } = require('./shared/authMiddleware');
 
+// Try to load vectors module for memory deletion (optional - may not be available in all deployments)
+let vectorsModule = null;
+try {
+  vectorsModule = require('/opt/nodejs/shared/vectors');
+} catch (e) {
+  console.log('[Sessions] Vectors module not available - memory cleanup will be skipped');
+}
+
 const SESSIONS_TABLE = process.env.SESSIONS_TABLE;
 const MESSAGES_TABLE = process.env.MESSAGES_TABLE;
 const ARTIFACTS_TABLE = process.env.ARTIFACTS_TABLE;
@@ -58,6 +66,9 @@ exports.handler = async (event) => {
   }
 };
 
+// Special value for sessions not associated with a project (for GSI compatibility)
+const GLOBAL_SESSION_MARKER = '__GLOBAL__';
+
 /**
  * List all sessions for user
  */
@@ -65,17 +76,18 @@ async function listSessions(userId) {
   const sessions = await queryItems(SESSIONS_TABLE, {
     expression: 'userId = :userId',
     values: { ':userId': userId }
-  }, { 
+  }, {
     indexName: 'userId-updatedAt-index',
-    ascending: false 
+    ascending: false
   });
-  
+
   return success({
     sessions: sessions.map(s => ({
       id: s.sessionId,
       title: s.title,
       starred: s.starred || false,
-      projectId: s.projectId,
+      // Convert marker back to null for API response
+      projectId: s.projectId === GLOBAL_SESSION_MARKER ? null : s.projectId,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt
     }))
@@ -87,16 +99,17 @@ async function listSessions(userId) {
  */
 async function getSession(userId, sessionId) {
   const session = await getItem(SESSIONS_TABLE, { userId, sessionId });
-  
+
   if (!session) {
     return notFound('Session not found');
   }
-  
+
   return success({
     id: session.sessionId,
     title: session.title,
     starred: session.starred || false,
-    projectId: session.projectId,
+    // Convert marker back to null for API response
+    projectId: session.projectId === GLOBAL_SESSION_MARKER ? null : session.projectId,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt
   });
@@ -135,27 +148,31 @@ async function getSessionMessages(userId, sessionId) {
  */
 async function createSession(userId, event) {
   const body = parseBody(event);
-  
+
   const sessionId = `session_${Date.now()}`;
   const now = Date.now();
-  
+
+  // Use special marker for global sessions (GSI requires non-null string for projectId)
+  const projectId = body.projectId || GLOBAL_SESSION_MARKER;
+
   const session = {
     userId,
     sessionId,
     title: body.title || null,
     starred: false,
-    projectId: body.projectId || null,
+    projectId,
     createdAt: now,
     updatedAt: now
   };
-  
+
   await putItem(SESSIONS_TABLE, session);
-  
+
+  // Return null for projectId if it's a global session (for API consistency)
   return created({
     id: session.sessionId,
     title: session.title,
     starred: session.starred,
-    projectId: session.projectId,
+    projectId: projectId === GLOBAL_SESSION_MARKER ? null : projectId,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt
   });
@@ -166,16 +183,16 @@ async function createSession(userId, event) {
  */
 async function updateSession(userId, sessionId, event) {
   const body = parseBody(event);
-  
+
   // Verify session exists
   const session = await getItem(SESSIONS_TABLE, { userId, sessionId });
   if (!session) {
     return notFound('Session not found');
   }
-  
+
   // Build updates
   const updates = { updatedAt: Date.now() };
-  
+
   if (body.title !== undefined) {
     updates.title = body.title;
   }
@@ -183,23 +200,25 @@ async function updateSession(userId, sessionId, event) {
     updates.starred = body.starred;
   }
   if (body.projectId !== undefined) {
-    updates.projectId = body.projectId;
+    // Use marker for null projectId
+    updates.projectId = body.projectId || GLOBAL_SESSION_MARKER;
   }
-  
+
   const updated = await updateItem(SESSIONS_TABLE, { userId, sessionId }, updates);
-  
+
   return success({
     id: updated.sessionId,
     title: updated.title,
     starred: updated.starred,
-    projectId: updated.projectId,
+    // Convert marker back to null for API response
+    projectId: updated.projectId === GLOBAL_SESSION_MARKER ? null : updated.projectId,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt
   });
 }
 
 /**
- * Delete a session and its messages, artifacts (from DynamoDB and S3)
+ * Delete a session and its messages, artifacts (from DynamoDB and S3), and memory vectors
  */
 async function deleteSession(userId, sessionId) {
   // Verify session exists
@@ -251,6 +270,29 @@ async function deleteSession(userId, sessionId) {
     }));
     await batchDeleteItems(ARTIFACTS_TABLE, artifactKeys);
     console.log(`Deleted ${artifacts.length} artifacts from DynamoDB`);
+  }
+
+  // Delete memory vectors associated with this session
+  if (vectorsModule) {
+    try {
+      const projectId = session.projectId;
+      if (projectId && projectId !== GLOBAL_SESSION_MARKER) {
+        // Project session - delete from project indexes
+        console.log(`Deleting project memory vectors for session ${sessionId}`);
+        await vectorsModule.deleteSessionVectors(userId, projectId, sessionId);
+        console.log(`Deleted project memory vectors for session ${sessionId}`);
+      } else {
+        // Global session - delete from global indexes
+        console.log(`Deleting global memory vectors for session ${sessionId}`);
+        await vectorsModule.deleteSessionGlobalData(userId, sessionId);
+        console.log(`Deleted global memory vectors for session ${sessionId}`);
+      }
+    } catch (e) {
+      console.error(`Failed to delete memory vectors for session ${sessionId}:`, e);
+      // Continue even if vector deletion fails - don't block session deletion
+    }
+  } else {
+    console.log(`[Sessions] Skipping memory vector cleanup - vectors module not available`);
   }
 
   // Delete session

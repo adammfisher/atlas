@@ -80,7 +80,8 @@ resource "aws_lambda_function_url" "chat_stream" {
   cors {
     allow_origins     = ["https://d2e9zue1tj9oj5.cloudfront.net", "http://localhost:3000"]
     allow_methods     = ["*"]
-    allow_headers     = ["*"]
+    allow_headers     = ["content-type", "authorization", "x-user-id"]
+    expose_headers    = ["*"]
     allow_credentials = true
     max_age           = 86400
   }

@@ -9,7 +9,15 @@ const { DynamoDBDocumentClient, QueryCommand, UpdateCommand, GetCommand } = requ
 
 // Import shared modules
 const { extractFacts, chunkConversation } = require('/opt/nodejs/shared/memoryExtractor');
-const { storeConversationChunk, storeMemoryFact, createProjectIndexes, projectIndexesExist } = require('/opt/nodejs/shared/vectors');
+const {
+  storeConversationChunk,
+  storeMemoryFact,
+  createProjectIndexes,
+  projectIndexesExist,
+  // Global memory functions
+  storeGlobalConversationChunk,
+  storeGlobalMemoryFact
+} = require('/opt/nodejs/shared/vectors');
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
@@ -31,6 +39,9 @@ exports.handler = async (event) => {
       return await processSession(event.userId, event.projectId, event.sessionId);
     } else if (event.action === 'processProject') {
       return await processProject(event.userId, event.projectId);
+    } else if (event.action === 'processGlobalSession') {
+      // NEW: Process non-project session for global memory
+      return await processGlobalSession(event.userId, event.sessionId);
     } else if (event.action === 'initializeIndexes') {
       return await initializeProjectIndexes(event.userId, event.projectId);
     } else if (event.Records) {
@@ -185,6 +196,80 @@ async function processProject(userId, projectId) {
       sessionsProcessed,
       totalChunks,
       totalFacts
+    })
+  };
+}
+
+/**
+ * Process a global (non-project) session - store in shared global indexes
+ * This is for conversations that are NOT associated with a project
+ * @param {string} userId - User ID
+ * @param {string} sessionId - Session ID
+ */
+async function processGlobalSession(userId, sessionId) {
+  console.log(`[MemoryProcessor] Processing global session ${sessionId} for user ${userId}`);
+
+  // Fetch all messages for the session
+  const messages = await getSessionMessages(sessionId);
+  if (messages.length === 0) {
+    console.log(`[MemoryProcessor] No messages found for session ${sessionId}`);
+    return { statusCode: 200, body: 'No messages to process' };
+  }
+
+  console.log(`[MemoryProcessor] Found ${messages.length} messages to process`);
+
+  // 1. Chunk and embed conversation
+  const chunks = chunkConversation(messages);
+  let chunksStored = 0;
+
+  for (const chunk of chunks) {
+    try {
+      await storeGlobalConversationChunk(userId, {
+        sessionId,
+        chunkIndex: chunksStored,
+        content: chunk.content,
+        timestamp: chunk.startTimestamp,
+        messageCount: chunk.messageCount
+      });
+      chunksStored++;
+    } catch (err) {
+      console.error(`[MemoryProcessor] Failed to store global chunk:`, err.message);
+    }
+  }
+
+  // 2. Extract and store facts
+  const facts = await extractFacts(messages);
+  let factsStored = 0;
+
+  for (const fact of facts) {
+    try {
+      await storeGlobalMemoryFact(userId, {
+        ...fact,
+        sourceSessionId: sessionId
+      });
+      factsStored++;
+    } catch (err) {
+      console.error(`[MemoryProcessor] Failed to store global fact:`, err.message);
+    }
+  }
+
+  // Update session processing status
+  await updateSessionProcessingStatus(sessionId, {
+    chunksStored,
+    factsExtracted: factsStored,
+    processedAt: Date.now(),
+    scope: 'global'
+  });
+
+  console.log(`[MemoryProcessor] Global session ${sessionId} processed: ${chunksStored} chunks, ${factsStored} facts`);
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      sessionId,
+      chunksStored,
+      factsExtracted: factsStored,
+      scope: 'global'
     })
   };
 }

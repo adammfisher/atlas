@@ -27,12 +27,37 @@ function getVectorsModule() {
     } catch (err) {
       console.warn('[Vectors] Module not available:', err.message);
       vectorsModule = {
+        // Project-level fallbacks
         searchMemories: async () => [],
-        searchConversations: async () => []
+        searchConversations: async () => [],
+        storeMemoryFact: async () => {},
+        storeConversationChunk: async () => {},
+        // Global-level fallbacks
+        searchGlobalMemories: async () => [],
+        searchGlobalConversations: async () => [],
+        storeGlobalMemoryFact: async () => ({ action: 'skipped' }),
+        storeGlobalConversationChunk: async () => {}
       };
     }
   }
   return vectorsModule;
+}
+
+// Memory extractor (lazy loaded)
+let memoryExtractorModule = null;
+function getMemoryExtractorModule() {
+  if (!memoryExtractorModule) {
+    try {
+      memoryExtractorModule = require('./shared/memoryExtractor');
+    } catch (err) {
+      console.warn('[MemoryExtractor] Module not available:', err.message);
+      memoryExtractorModule = {
+        extractFacts: async () => [],
+        chunkConversation: () => []
+      };
+    }
+  }
+  return memoryExtractorModule;
 }
 
 // Bedrock client for memory generation
@@ -241,13 +266,15 @@ async function handleStreamingChatWithStream(userId, event, responseStream) {
     console.log(`  [${i}] ${m.role}: ${m.content?.substring(0, 200)}...`);
   });
 
-  // Get project context if in a project
+  // Get project context if in a project, or global context if not
   // Use projectId from request if session doesn't have one (for new sessions)
   const effectiveProjectId = session.projectId || projectId;
   let projectContext = null;
+  let globalContext = null;
   console.log('[ProjectContext] Checking:', { sessionProjectId: session.projectId, requestProjectId: projectId, effectiveProjectId });
+
   if (effectiveProjectId) {
-    // Pass the user's message for semantic memory search
+    // IN A PROJECT - use project memory (existing behavior)
     projectContext = await getProjectContext(userId, effectiveProjectId, message);
     console.log('[ProjectContext] Result:', projectContext ? `Found: ${projectContext.project?.name}` : 'NOT FOUND');
 
@@ -257,6 +284,7 @@ async function handleStreamingChatWithStream(userId, event, responseStream) {
       if (semanticMemoryCount > 0 || relevantConversationsCount > 0) {
         responseStream.write(`data: ${JSON.stringify({
           type: 'memory_context',
+          scope: 'project',
           semanticMemoryCount,
           relevantConversationsCount,
           projectName: projectContext.project?.name,
@@ -266,7 +294,24 @@ async function handleStreamingChatWithStream(userId, event, responseStream) {
       }
     }
   } else {
-    console.log('[ProjectContext] No projectId, skipping');
+    // NOT IN A PROJECT - use global memory (NEW behavior)
+    console.log('[GlobalContext] No projectId, searching global memory');
+    globalContext = await getGlobalContext(userId, message, history.slice(-6));
+
+    // Send memory context event for global
+    if (globalContext && globalContext.stats) {
+      const { globalMemoryCount, globalConversationsCount } = globalContext.stats;
+      if (globalMemoryCount > 0 || globalConversationsCount > 0) {
+        responseStream.write(`data: ${JSON.stringify({
+          type: 'memory_context',
+          scope: 'global',
+          globalMemoryCount,
+          globalConversationsCount,
+          memories: globalContext.rawGlobalMemories || [],
+          conversations: globalContext.rawGlobalConversations || []
+        })}\n\n`);
+      }
+    }
   }
 
   // Compact conversation if needed (token-based)
@@ -310,7 +355,7 @@ async function handleStreamingChatWithStream(userId, event, responseStream) {
   }
 
   // Build system prompt and messages
-  const systemPrompt = buildSystemPrompt(projectContext, webSearchEnabled, existingArtifacts);
+  const systemPrompt = buildSystemPrompt(projectContext, webSearchEnabled, existingArtifacts, globalContext);
 
   // Process files, extracting any zip files
   let processedFiles = files;
@@ -602,10 +647,17 @@ async function handleStreamingChatWithStream(userId, event, responseStream) {
     }
   );
 
-  // Update project memory (non-blocking)
+  // Update memory (non-blocking)
   if (effectiveProjectId && fullResponse) {
+    // Project memory update - both DynamoDB (legacy) and S3 Vectors (semantic search)
     updateProjectMemoryIncremental(userId, effectiveProjectId, message, fullResponse)
-      .catch(err => console.error('[Memory] Background update failed:', err.message));
+      .catch(err => console.error('[Memory] Project DynamoDB update failed:', err.message));
+    updateProjectVectorMemory(userId, effectiveProjectId, activeSessionId, message, fullResponse)
+      .catch(err => console.error('[Memory] Project vector update failed:', err.message));
+  } else if (!effectiveProjectId && fullResponse) {
+    // Global memory update (S3 Vectors only)
+    updateGlobalMemoryIncremental(userId, activeSessionId, message, fullResponse)
+      .catch(err => console.error('[Memory] Global update failed:', err.message));
   }
 
   // Send completion event
@@ -689,14 +741,16 @@ async function handleStreamingChat(userId, event) {
     console.log(`  [${i}] ${m.role}: ${m.content?.substring(0, 200)}...`);
   });
 
-  // Get project context if in a project
+  // Get project context if in a project, or global context if not
   // Use projectId from request if session doesn't have one (for new sessions)
   const effectiveProjectId = session.projectId || projectId;
   let projectContext = null;
+  let globalContext = null;
   let memoryContextEvent = null;
   console.log('[ProjectContext API GW] Checking:', { sessionProjectId: session.projectId, requestProjectId: projectId, effectiveProjectId });
+
   if (effectiveProjectId) {
-    // Pass the user's message for semantic memory search
+    // IN A PROJECT - use project memory (existing behavior)
     projectContext = await getProjectContext(userId, effectiveProjectId, message);
     console.log('[ProjectContext API GW] Result:', projectContext ? `Found: ${projectContext.project?.name}` : 'NOT FOUND');
 
@@ -706,6 +760,7 @@ async function handleStreamingChat(userId, event) {
       if (semanticMemoryCount > 0 || relevantConversationsCount > 0) {
         memoryContextEvent = {
           type: 'memory_context',
+          scope: 'project',
           semanticMemoryCount,
           relevantConversationsCount,
           projectName: projectContext.project?.name,
@@ -715,7 +770,24 @@ async function handleStreamingChat(userId, event) {
       }
     }
   } else {
-    console.log('[ProjectContext API GW] No projectId, skipping');
+    // NOT IN A PROJECT - use global memory (NEW behavior)
+    console.log('[GlobalContext API GW] No projectId, searching global memory');
+    globalContext = await getGlobalContext(userId, message, history.slice(-6));
+
+    // Prepare memory context event for global
+    if (globalContext && globalContext.stats) {
+      const { globalMemoryCount, globalConversationsCount } = globalContext.stats;
+      if (globalMemoryCount > 0 || globalConversationsCount > 0) {
+        memoryContextEvent = {
+          type: 'memory_context',
+          scope: 'global',
+          globalMemoryCount,
+          globalConversationsCount,
+          memories: globalContext.rawGlobalMemories || [],
+          conversations: globalContext.rawGlobalConversations || []
+        };
+      }
+    }
   }
 
   // Compact conversation if needed (token-based)
@@ -764,7 +836,7 @@ async function handleStreamingChat(userId, event) {
   }
 
   // Build system prompt
-  const systemPrompt = buildSystemPrompt(projectContext, webSearchEnabled, existingArtifacts);
+  const systemPrompt = buildSystemPrompt(projectContext, webSearchEnabled, existingArtifacts, globalContext);
 
   // Process files, extracting any zip files
   let processedFiles = files;
@@ -1031,10 +1103,17 @@ async function handleStreamingChat(userId, event) {
     }
   );
 
-  // Update project memory (non-blocking)
+  // Update memory (non-blocking)
   if (effectiveProjectId && fullResponse) {
+    // Project memory update - both DynamoDB (legacy) and S3 Vectors (semantic search)
     updateProjectMemoryIncremental(userId, effectiveProjectId, message, fullResponse)
-      .catch(err => console.error('[Memory] Background update failed:', err.message));
+      .catch(err => console.error('[Memory] Project DynamoDB update failed:', err.message));
+    updateProjectVectorMemory(userId, effectiveProjectId, activeSessionId, message, fullResponse)
+      .catch(err => console.error('[Memory] Project vector update failed:', err.message));
+  } else if (!effectiveProjectId && fullResponse) {
+    // Global memory update (S3 Vectors only)
+    updateGlobalMemoryIncremental(userId, activeSessionId, message, fullResponse)
+      .catch(err => console.error('[Memory] Global update failed:', err.message));
   }
 
   // Send completion event
@@ -1257,6 +1336,211 @@ async function getProjectContext(userId, projectId, query = null) {
       relevantConversationsCount: semanticConversations.length
     }
   };
+}
+
+/**
+ * Build semantic query - expand short messages with recent context
+ * @param {string} currentMessage - Current user message
+ * @param {Array} recentMessages - Recent messages for context
+ * @returns {string} - Expanded query for semantic search
+ */
+function buildSemanticQuery(currentMessage, recentMessages = []) {
+  if (!currentMessage) return '';
+
+  const wordCount = currentMessage.trim().split(/\s+/).length;
+
+  // Short message (< 5 words) - expand with recent context
+  if (wordCount < 5 && recentMessages.length > 0) {
+    const recent = recentMessages
+      .slice(-3)
+      .map(m => m.content)
+      .filter(Boolean)
+      .join(' ');
+    return `${recent} ${currentMessage}`.trim();
+  }
+
+  return currentMessage;
+}
+
+/**
+ * Get global context for non-project chats
+ * Retrieves user-level memories and conversation history
+ * @param {string} userId - User ID
+ * @param {string} query - Current message for semantic search
+ * @param {Array} recentMessages - Recent messages for query expansion
+ * @returns {Object} - Global context with memories and conversations
+ */
+async function getGlobalContext(userId, query, recentMessages = []) {
+  let globalMemories = [];
+  let globalConversations = [];
+
+  if (!VECTORS_BUCKET) {
+    console.log('[GlobalContext] VECTORS_BUCKET not configured, skipping');
+    return { globalMemory: null, globalConversations: null, stats: {} };
+  }
+
+  try {
+    const vectors = getVectorsModule();
+
+    // Build semantic query - expand short messages with recent context
+    const semanticQuery = buildSemanticQuery(query, recentMessages);
+    console.log(`[GlobalContext] Semantic query: "${semanticQuery.substring(0, 100)}..."`);
+
+    // Search global memories (filtered by userId internally)
+    // Note: Using lower minScore (0.1) because S3 Vectors uses cosine distance
+    // which results in lower similarity scores than other vector DBs
+    globalMemories = await vectors.searchGlobalMemories(userId, semanticQuery, {
+      topK: 15,
+      minScore: 0.1
+    });
+
+    // Search global conversations
+    globalConversations = await vectors.searchGlobalConversations(userId, semanticQuery, {
+      topK: 5
+    });
+
+  } catch (err) {
+    console.warn('[GlobalContext] Search failed:', err.message);
+  }
+
+  // Format for system prompt
+  let formattedGlobalMemory = null;
+  if (globalMemories.length > 0) {
+    const factsByCategory = {};
+    for (const mem of globalMemories) {
+      const cat = mem.category || 'general';
+      if (!factsByCategory[cat]) factsByCategory[cat] = [];
+      factsByCategory[cat].push(`- ${mem.content}`);
+    }
+    const memoryParts = Object.entries(factsByCategory)
+      .map(([cat, facts]) => `**${cat}**\n${facts.join('\n')}`)
+      .join('\n\n');
+    formattedGlobalMemory = memoryParts;
+  }
+
+  let formattedConversations = null;
+  if (globalConversations.length > 0) {
+    formattedConversations = globalConversations
+      .map(c => {
+        const date = new Date(c.timestamp).toLocaleDateString();
+        return `[${date}] ${c.summary || c.contentPreview || '...'}`;
+      })
+      .join('\n\n');
+  }
+
+  console.log(`[GlobalContext] Retrieved ${globalMemories.length} memories, ${globalConversations.length} conversations`);
+
+  return {
+    globalMemory: formattedGlobalMemory,
+    globalConversations: formattedConversations,
+    rawGlobalMemories: globalMemories,
+    rawGlobalConversations: globalConversations,
+    stats: {
+      globalMemoryCount: globalMemories.length,
+      globalConversationsCount: globalConversations.length
+    }
+  };
+}
+
+/**
+ * Update project vector memory incrementally after a chat message
+ * This stores facts and conversation chunks to S3 Vectors for semantic search
+ * @param {string} userId - User ID
+ * @param {string} projectId - Project ID
+ * @param {string} sessionId - Session ID
+ * @param {string} userMessage - User's message
+ * @param {string} assistantResponse - Assistant's response
+ */
+async function updateProjectVectorMemory(userId, projectId, sessionId, userMessage, assistantResponse) {
+  if (!VECTORS_BUCKET) {
+    console.log('[Memory] VECTORS_BUCKET not configured, skipping vector storage');
+    return;
+  }
+
+  try {
+    const vectors = getVectorsModule();
+    const memoryExtractor = getMemoryExtractorModule();
+
+    // 1. Store conversation chunk to project-level index
+    const now = Date.now();
+    await vectors.storeConversationChunk(userId, projectId, {
+      sessionId,
+      messageId: `msg_${now}`,
+      role: 'exchange',
+      content: `User: ${userMessage}\n\nAssistant: ${assistantResponse.substring(0, 2000)}`,
+      timestamp: now
+    });
+
+    // 2. Extract and store facts to project-level index
+    const facts = await memoryExtractor.extractFacts([
+      { role: 'user', content: userMessage, timestamp: now },
+      { role: 'assistant', content: assistantResponse.substring(0, 3000), timestamp: now }
+    ]);
+
+    let factsStored = 0;
+    for (const fact of facts) {
+      try {
+        await vectors.storeMemoryFact(userId, projectId, {
+          ...fact,
+          sourceSessionId: sessionId
+        });
+        factsStored++;
+      } catch (err) {
+        console.error('[Memory] Failed to store project fact:', err.message);
+      }
+    }
+
+    console.log(`[Memory] Project vector update: 1 chunk, ${factsStored}/${facts.length} facts for project ${projectId}`);
+  } catch (err) {
+    console.error('[Memory] Project vector update failed:', err.message);
+  }
+}
+
+/**
+ * Update global memory incrementally after a chat message
+ * This is non-blocking and runs in the background
+ * @param {string} userId - User ID
+ * @param {string} sessionId - Session ID
+ * @param {string} userMessage - User's message
+ * @param {string} assistantResponse - Assistant's response
+ */
+async function updateGlobalMemoryIncremental(userId, sessionId, userMessage, assistantResponse) {
+  try {
+    const vectors = getVectorsModule();
+    const memoryExtractor = getMemoryExtractorModule();
+
+    // 1. Store conversation chunk
+    await vectors.storeGlobalConversationChunk(userId, {
+      sessionId,
+      chunkIndex: Date.now(),
+      content: `User: ${userMessage}\n\nAssistant: ${assistantResponse.substring(0, 2000)}`,
+      timestamp: Date.now(),
+      messageCount: 2
+    });
+
+    // 2. Extract and store facts
+    const facts = await memoryExtractor.extractFacts([
+      { role: 'user', content: userMessage, timestamp: Date.now() },
+      { role: 'assistant', content: assistantResponse.substring(0, 3000), timestamp: Date.now() }
+    ]);
+
+    let factsStored = 0;
+    for (const fact of facts) {
+      try {
+        await vectors.storeGlobalMemoryFact(userId, {
+          ...fact,
+          sourceSessionId: sessionId
+        });
+        factsStored++;
+      } catch (err) {
+        console.error('[Memory] Failed to store global fact:', err.message);
+      }
+    }
+
+    console.log(`[Memory] Global update: 1 chunk, ${factsStored}/${facts.length} facts for session ${sessionId}`);
+  } catch (err) {
+    console.error('[Memory] Global update failed:', err.message);
+  }
 }
 
 /**

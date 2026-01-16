@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1100">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1200">
   <defs>
     <!-- Gradients -->
     <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -29,6 +29,14 @@
       <stop offset="0%" style="stop-color:#FF9900"/>
       <stop offset="100%" style="stop-color:#D86613"/>
     </linearGradient>
+    <linearGradient id="vectorGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#9C27B0"/>
+      <stop offset="100%" style="stop-color:#7B1FA2"/>
+    </linearGradient>
+    <linearGradient id="memoryGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#00BCD4"/>
+      <stop offset="100%" style="stop-color:#0097A7"/>
+    </linearGradient>
 
     <!-- Drop Shadow -->
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
@@ -45,313 +53,420 @@
     <marker id="arrowheadOrange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#FF9900"/>
     </marker>
+    <marker id="arrowheadPurple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#9C27B0"/>
+    </marker>
   </defs>
 
   <!-- Background -->
-  <rect width="1400" height="1100" fill="#f8f9fa"/>
+  <rect width="1400" height="1200" fill="#f8f9fa"/>
 
   <!-- Title Header -->
   <rect x="0" y="0" width="1400" height="60" fill="url(#headerGrad)"/>
-  <text x="700" y="38" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="white" text-anchor="middle">Atlas Platform - System Architecture</text>
+  <text x="700" y="38" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="white" text-anchor="middle">Atlas Platform - System Architecture with Dual-Scope Memory</text>
 
   <!-- ==================== FRONTEND SECTION ==================== -->
-  <rect x="30" y="80" width="400" height="280" rx="10" fill="#E3F2FD" stroke="#1976D2" stroke-width="2" filter="url(#shadow)"/>
+  <rect x="30" y="80" width="400" height="260" rx="10" fill="#E3F2FD" stroke="#1976D2" stroke-width="2" filter="url(#shadow)"/>
   <rect x="30" y="80" width="400" height="35" rx="10" fill="url(#reactGrad)"/>
   <text x="230" y="103" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">FRONTEND (React + Vite)</text>
 
   <!-- Frontend Components -->
-  <rect x="50" y="130" width="170" height="90" rx="5" fill="white" stroke="#1976D2" stroke-width="1"/>
+  <rect x="50" y="130" width="170" height="80" rx="5" fill="white" stroke="#1976D2" stroke-width="1"/>
   <text x="135" y="150" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1976D2" text-anchor="middle">Components</text>
-  <text x="60" y="170" font-family="Arial, sans-serif" font-size="10" fill="#333">• ChatView</text>
-  <text x="60" y="183" font-family="Arial, sans-serif" font-size="10" fill="#333">• ArtifactsPanel</text>
-  <text x="60" y="196" font-family="Arial, sans-serif" font-size="10" fill="#333">• ProjectDetailView</text>
-  <text x="60" y="209" font-family="Arial, sans-serif" font-size="10" fill="#333">• Sidebar, InsightsBubble</text>
+  <text x="60" y="168" font-family="Arial, sans-serif" font-size="9" fill="#333">• ChatView, ArtifactsPanel</text>
+  <text x="60" y="180" font-family="Arial, sans-serif" font-size="9" fill="#333">• ProjectDetailView, Sidebar</text>
+  <text x="60" y="192" font-family="Arial, sans-serif" font-size="9" fill="#333">• InsightsBubble, Auth</text>
 
-  <rect x="240" y="130" width="170" height="90" rx="5" fill="white" stroke="#1976D2" stroke-width="1"/>
+  <rect x="240" y="130" width="170" height="80" rx="5" fill="white" stroke="#1976D2" stroke-width="1"/>
   <text x="325" y="150" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1976D2" text-anchor="middle">State (Zustand)</text>
-  <text x="250" y="170" font-family="Arial, sans-serif" font-size="10" fill="#333">• useChatStore</text>
-  <text x="250" y="183" font-family="Arial, sans-serif" font-size="10" fill="#333">• useInsightsStore</text>
-  <text x="250" y="196" font-family="Arial, sans-serif" font-size="10" fill="#333">• AuthContext</text>
-  <text x="250" y="209" font-family="Arial, sans-serif" font-size="10" fill="#333">• Local Storage Persist</text>
+  <text x="250" y="168" font-family="Arial, sans-serif" font-size="9" fill="#333">• useChatStore</text>
+  <text x="250" y="180" font-family="Arial, sans-serif" font-size="9" fill="#333">• AuthContext</text>
+  <text x="250" y="192" font-family="Arial, sans-serif" font-size="9" fill="#333">• Local Storage Persist</text>
 
-  <rect x="50" y="235" width="170" height="90" rx="5" fill="white" stroke="#1976D2" stroke-width="1"/>
-  <text x="135" y="255" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1976D2" text-anchor="middle">Services</text>
-  <text x="60" y="275" font-family="Arial, sans-serif" font-size="10" fill="#333">• chatService (SSE)</text>
-  <text x="60" y="288" font-family="Arial, sans-serif" font-size="10" fill="#333">• sessionsService</text>
-  <text x="60" y="301" font-family="Arial, sans-serif" font-size="10" fill="#333">• projectsService</text>
-  <text x="60" y="314" font-family="Arial, sans-serif" font-size="10" fill="#333">• authService</text>
+  <rect x="50" y="220" width="170" height="80" rx="5" fill="white" stroke="#1976D2" stroke-width="1"/>
+  <text x="135" y="240" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1976D2" text-anchor="middle">Services</text>
+  <text x="60" y="258" font-family="Arial, sans-serif" font-size="9" fill="#333">• chatService (SSE Stream)</text>
+  <text x="60" y="270" font-family="Arial, sans-serif" font-size="9" fill="#333">• sessionsService, projectsService</text>
+  <text x="60" y="282" font-family="Arial, sans-serif" font-size="9" fill="#333">• authService</text>
 
-  <rect x="240" y="235" width="170" height="90" rx="5" fill="white" stroke="#1976D2" stroke-width="1"/>
-  <text x="325" y="255" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1976D2" text-anchor="middle">Renderers</text>
-  <text x="250" y="275" font-family="Arial, sans-serif" font-size="10" fill="#333">• Markdown (ReactMD)</text>
-  <text x="250" y="288" font-family="Arial, sans-serif" font-size="10" fill="#333">• Code (Syntax HL)</text>
-  <text x="250" y="301" font-family="Arial, sans-serif" font-size="10" fill="#333">• Mermaid, HTML, SVG</text>
-  <text x="250" y="314" font-family="Arial, sans-serif" font-size="10" fill="#333">• JSON, CSV, React</text>
+  <rect x="240" y="220" width="170" height="80" rx="5" fill="white" stroke="#1976D2" stroke-width="1"/>
+  <text x="325" y="240" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1976D2" text-anchor="middle">Renderers</text>
+  <text x="250" y="258" font-family="Arial, sans-serif" font-size="9" fill="#333">• Markdown, Code, HTML</text>
+  <text x="250" y="270" font-family="Arial, sans-serif" font-size="9" fill="#333">• Mermaid, SVG, React</text>
+  <text x="250" y="282" font-family="Arial, sans-serif" font-size="9" fill="#333">• JSON, CSV, YAML</text>
 
   <!-- ==================== API GATEWAY SECTION ==================== -->
-  <rect x="30" y="380" width="400" height="100" rx="10" fill="#FFF3E0" stroke="#FF9900" stroke-width="2" filter="url(#shadow)"/>
-  <rect x="30" y="380" width="400" height="30" rx="10" fill="url(#awsGrad)"/>
-  <text x="230" y="400" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">API GATEWAY HTTP API v2</text>
-
-  <text x="50" y="430" font-family="Arial, sans-serif" font-size="11" fill="#333">Routes: /api/auth/*, /api/sessions/*, /api/projects/*</text>
-  <text x="50" y="445" font-family="Arial, sans-serif" font-size="11" fill="#333">            /api/files/*, /api/artifacts/*, /api/mcp/*</text>
-  <text x="50" y="465" font-family="Arial, sans-serif" font-size="11" fill="#666">JWT Auth via Header or Cookie • CORS Enabled</text>
+  <rect x="30" y="355" width="400" height="80" rx="10" fill="#FFF3E0" stroke="#FF9900" stroke-width="2" filter="url(#shadow)"/>
+  <rect x="30" y="355" width="400" height="30" rx="10" fill="url(#awsGrad)"/>
+  <text x="230" y="375" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">API GATEWAY HTTP API v2</text>
+  <text x="50" y="405" font-family="Arial, sans-serif" font-size="10" fill="#333">Routes: /api/auth/*, /api/sessions/*, /api/projects/*, /api/chat/*</text>
+  <text x="50" y="420" font-family="Arial, sans-serif" font-size="10" fill="#666">JWT Auth via Header or Cookie • CORS Enabled</text>
 
   <!-- ==================== LAMBDA FUNCTIONS ==================== -->
-  <rect x="460" y="80" width="480" height="400" rx="10" fill="#FFF8E1" stroke="#FF9900" stroke-width="2" filter="url(#shadow)"/>
+  <rect x="460" y="80" width="480" height="355" rx="10" fill="#FFF8E1" stroke="#FF9900" stroke-width="2" filter="url(#shadow)"/>
   <rect x="460" y="80" width="480" height="35" rx="10" fill="url(#lambdaGrad)"/>
   <text x="700" y="103" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">AWS LAMBDA FUNCTIONS (Node.js 20.x)</text>
 
   <!-- Lambda: Auth -->
-  <rect x="480" y="130" width="140" height="75" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
-  <text x="550" y="150" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">auth</text>
-  <text x="490" y="168" font-family="Arial, sans-serif" font-size="9" fill="#333">• Login/Register</text>
-  <text x="490" y="180" font-family="Arial, sans-serif" font-size="9" fill="#333">• JWT Generation</text>
-  <text x="490" y="192" font-family="Arial, sans-serif" font-size="9" fill="#333">• Bcrypt (12 rounds)</text>
+  <rect x="480" y="125" width="140" height="65" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
+  <text x="550" y="143" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">auth</text>
+  <text x="490" y="158" font-family="Arial, sans-serif" font-size="9" fill="#333">• Login/Register</text>
+  <text x="490" y="170" font-family="Arial, sans-serif" font-size="9" fill="#333">• JWT + bcrypt</text>
+  <text x="490" y="182" font-family="Arial, sans-serif" font-size="9" fill="#333">• Global indexes init</text>
 
   <!-- Lambda: Sessions -->
-  <rect x="630" y="130" width="140" height="75" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
-  <text x="700" y="150" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">sessions</text>
-  <text x="640" y="168" font-family="Arial, sans-serif" font-size="9" fill="#333">• CRUD Sessions</text>
-  <text x="640" y="180" font-family="Arial, sans-serif" font-size="9" fill="#333">• Message History</text>
-  <text x="640" y="192" font-family="Arial, sans-serif" font-size="9" fill="#333">• Star/Unstar</text>
+  <rect x="630" y="125" width="140" height="65" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
+  <text x="700" y="143" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">sessions</text>
+  <text x="640" y="158" font-family="Arial, sans-serif" font-size="9" fill="#333">• CRUD Sessions</text>
+  <text x="640" y="170" font-family="Arial, sans-serif" font-size="9" fill="#333">• Message History</text>
+  <text x="640" y="182" font-family="Arial, sans-serif" font-size="9" fill="#333">• Memory Cleanup</text>
 
   <!-- Lambda: Projects -->
-  <rect x="780" y="130" width="140" height="75" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
-  <text x="850" y="150" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">projects</text>
-  <text x="790" y="168" font-family="Arial, sans-serif" font-size="9" fill="#333">• Project CRUD</text>
-  <text x="790" y="180" font-family="Arial, sans-serif" font-size="9" fill="#333">• File Management</text>
-  <text x="790" y="192" font-family="Arial, sans-serif" font-size="9" fill="#333">• Memory Sections</text>
+  <rect x="780" y="125" width="140" height="65" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
+  <text x="850" y="143" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">projects</text>
+  <text x="790" y="158" font-family="Arial, sans-serif" font-size="9" fill="#333">• Project CRUD</text>
+  <text x="790" y="170" font-family="Arial, sans-serif" font-size="9" fill="#333">• File Management</text>
+  <text x="790" y="182" font-family="Arial, sans-serif" font-size="9" fill="#333">• Index Creation</text>
 
   <!-- Lambda: Chat (Large - Main) -->
-  <rect x="480" y="220" width="290" height="120" rx="5" fill="#FFECB3" stroke="#FF9900" stroke-width="2"/>
-  <text x="625" y="242" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#D86613" text-anchor="middle">chat (Lambda Response Streaming)</text>
-  <text x="490" y="262" font-family="Arial, sans-serif" font-size="10" fill="#333">• Real-time SSE Streaming</text>
-  <text x="490" y="277" font-family="Arial, sans-serif" font-size="10" fill="#333">• Context Assembly (200K tokens)</text>
-  <text x="490" y="292" font-family="Arial, sans-serif" font-size="10" fill="#333">• Conversation Compaction (80% threshold)</text>
-  <text x="490" y="307" font-family="Arial, sans-serif" font-size="10" fill="#333">• Artifact Detection &amp; Streaming</text>
-  <text x="490" y="322" font-family="Arial, sans-serif" font-size="10" fill="#333">• File Processing (images, PDFs, zips)</text>
+  <rect x="480" y="200" width="290" height="110" rx="5" fill="#FFECB3" stroke="#FF9900" stroke-width="2"/>
+  <text x="625" y="220" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#D86613" text-anchor="middle">chat (Lambda Response Streaming)</text>
+  <text x="490" y="238" font-family="Arial, sans-serif" font-size="10" fill="#333">• Real-time SSE Streaming</text>
+  <text x="490" y="252" font-family="Arial, sans-serif" font-size="10" fill="#333">• Dual-Scope Memory Retrieval</text>
+  <text x="490" y="266" font-family="Arial, sans-serif" font-size="10" fill="#333">• Conversation Compaction (80% threshold)</text>
+  <text x="490" y="280" font-family="Arial, sans-serif" font-size="10" fill="#333">• Artifact Detection + File Processing</text>
+  <text x="490" y="294" font-family="Arial, sans-serif" font-size="10" fill="#333">• Global/Project Context Injection</text>
 
   <!-- Lambda: Artifacts -->
-  <rect x="780" y="220" width="140" height="75" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
-  <text x="850" y="240" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">artifacts</text>
-  <text x="790" y="258" font-family="Arial, sans-serif" font-size="9" fill="#333">• Artifact CRUD</text>
-  <text x="790" y="270" font-family="Arial, sans-serif" font-size="9" fill="#333">• S3 Storage</text>
-  <text x="790" y="282" font-family="Arial, sans-serif" font-size="9" fill="#333">• Versioning</text>
+  <rect x="780" y="200" width="140" height="65" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
+  <text x="850" y="218" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">artifacts</text>
+  <text x="790" y="233" font-family="Arial, sans-serif" font-size="9" fill="#333">• Artifact CRUD</text>
+  <text x="790" y="245" font-family="Arial, sans-serif" font-size="9" fill="#333">• S3 Storage</text>
+  <text x="790" y="257" font-family="Arial, sans-serif" font-size="9" fill="#333">• Versioning</text>
 
-  <!-- Lambda: Files -->
-  <rect x="480" y="355" width="140" height="60" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
-  <text x="550" y="375" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">files</text>
-  <text x="490" y="393" font-family="Arial, sans-serif" font-size="9" fill="#333">• Presigned URLs</text>
-  <text x="490" y="405" font-family="Arial, sans-serif" font-size="9" fill="#333">• Upload/Download</text>
+  <!-- Lambda: Files + MCP -->
+  <rect x="480" y="320" width="140" height="50" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
+  <text x="550" y="340" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">files</text>
+  <text x="490" y="358" font-family="Arial, sans-serif" font-size="9" fill="#333">• Presigned URLs</text>
 
-  <!-- Lambda: MCP Config -->
-  <rect x="630" y="355" width="140" height="60" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
-  <text x="700" y="375" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">mcp-config</text>
-  <text x="640" y="393" font-family="Arial, sans-serif" font-size="9" fill="#333">• Server Management</text>
-  <text x="640" y="405" font-family="Arial, sans-serif" font-size="9" fill="#333">• Tool Execution</text>
+  <rect x="630" y="320" width="140" height="50" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
+  <text x="700" y="340" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">mcp-config</text>
+  <text x="640" y="358" font-family="Arial, sans-serif" font-size="9" fill="#333">• Server Management</text>
 
   <!-- Lambda: Memory Processor -->
-  <rect x="780" y="355" width="140" height="60" rx="5" fill="white" stroke="#FF9900" stroke-width="1"/>
-  <text x="850" y="375" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#D86613" text-anchor="middle">memory-processor</text>
-  <text x="790" y="393" font-family="Arial, sans-serif" font-size="9" fill="#333">• Haiku Extraction</text>
-  <text x="790" y="405" font-family="Arial, sans-serif" font-size="9" fill="#333">• Memory Updates</text>
+  <rect x="780" y="275" width="140" height="95" rx="5" fill="#E1BEE7" stroke="#9C27B0" stroke-width="2"/>
+  <text x="850" y="295" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#7B1FA2" text-anchor="middle">memory-processor</text>
+  <text x="790" y="313" font-family="Arial, sans-serif" font-size="9" fill="#333">• Haiku Extraction</text>
+  <text x="790" y="326" font-family="Arial, sans-serif" font-size="9" fill="#333">• Global Facts</text>
+  <text x="790" y="339" font-family="Arial, sans-serif" font-size="9" fill="#333">• Project Facts</text>
+  <text x="790" y="352" font-family="Arial, sans-serif" font-size="9" fill="#333">• Deduplication (92%)</text>
 
   <!-- Shared Layer -->
-  <rect x="480" y="430" width="440" height="35" rx="5" fill="#E8EAF6" stroke="#3F51B5" stroke-width="1"/>
-  <text x="700" y="453" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#3F51B5" text-anchor="middle">Common Layer: bedrock.js, s3.js, authMiddleware.js, memoryExtractor.js</text>
+  <rect x="480" y="385" width="440" height="35" rx="5" fill="#E8EAF6" stroke="#3F51B5" stroke-width="1"/>
+  <text x="700" y="407" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#3F51B5" text-anchor="middle">Common Layer: bedrock.js, s3.js, authMiddleware.js, vectors.js, embeddings.js</text>
 
   <!-- ==================== AI ENGINE ==================== -->
-  <rect x="970" y="80" width="400" height="200" rx="10" fill="#FBE9E7" stroke="#D4A574" stroke-width="2" filter="url(#shadow)"/>
+  <rect x="970" y="80" width="400" height="180" rx="10" fill="#FBE9E7" stroke="#D4A574" stroke-width="2" filter="url(#shadow)"/>
   <rect x="970" y="80" width="400" height="35" rx="10" fill="url(#claudeGrad)"/>
-  <text x="1170" y="103" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">AWS BEDROCK (Claude AI)</text>
+  <text x="1170" y="103" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">AWS BEDROCK (AI Models)</text>
 
   <!-- Models -->
-  <rect x="990" y="130" width="120" height="60" rx="5" fill="white" stroke="#D4A574" stroke-width="1"/>
-  <text x="1050" y="150" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#B8956C" text-anchor="middle">Haiku 4.5</text>
-  <text x="1000" y="168" font-family="Arial, sans-serif" font-size="9" fill="#333">Fast, Cost-effective</text>
-  <text x="1000" y="180" font-family="Arial, sans-serif" font-size="9" fill="#333">$0.80/1M tokens</text>
+  <rect x="990" y="125" width="85" height="55" rx="5" fill="white" stroke="#D4A574" stroke-width="1"/>
+  <text x="1032" y="143" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#B8956C" text-anchor="middle">Haiku 4.5</text>
+  <text x="1000" y="158" font-family="Arial, sans-serif" font-size="8" fill="#333">Fast, cheap</text>
+  <text x="1000" y="170" font-family="Arial, sans-serif" font-size="8" fill="#333">$0.80/1M</text>
 
-  <rect x="1120" y="130" width="120" height="60" rx="5" fill="white" stroke="#D4A574" stroke-width="1"/>
-  <text x="1180" y="150" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#B8956C" text-anchor="middle">Sonnet 4.5</text>
-  <text x="1130" y="168" font-family="Arial, sans-serif" font-size="9" fill="#333">Balanced</text>
-  <text x="1130" y="180" font-family="Arial, sans-serif" font-size="9" fill="#333">$3.00/1M tokens</text>
+  <rect x="1085" y="125" width="85" height="55" rx="5" fill="white" stroke="#D4A574" stroke-width="1"/>
+  <text x="1127" y="143" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#B8956C" text-anchor="middle">Sonnet 4.5</text>
+  <text x="1095" y="158" font-family="Arial, sans-serif" font-size="8" fill="#333">Balanced</text>
+  <text x="1095" y="170" font-family="Arial, sans-serif" font-size="8" fill="#333">$3.00/1M</text>
 
-  <rect x="1250" y="130" width="100" height="60" rx="5" fill="white" stroke="#D4A574" stroke-width="1"/>
-  <text x="1300" y="150" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#B8956C" text-anchor="middle">Opus 4.5</text>
-  <text x="1260" y="168" font-family="Arial, sans-serif" font-size="9" fill="#333">Most Capable</text>
-  <text x="1260" y="180" font-family="Arial, sans-serif" font-size="9" fill="#333">$15/1M tokens</text>
+  <rect x="1180" y="125" width="85" height="55" rx="5" fill="white" stroke="#D4A574" stroke-width="1"/>
+  <text x="1222" y="143" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#B8956C" text-anchor="middle">Opus 4.5</text>
+  <text x="1190" y="158" font-family="Arial, sans-serif" font-size="8" fill="#333">Powerful</text>
+  <text x="1190" y="170" font-family="Arial, sans-serif" font-size="8" fill="#333">$15/1M</text>
+
+  <rect x="1275" y="125" width="85" height="55" rx="5" fill="#E1BEE7" stroke="#9C27B0" stroke-width="1"/>
+  <text x="1317" y="143" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#7B1FA2" text-anchor="middle">Titan V2</text>
+  <text x="1285" y="158" font-family="Arial, sans-serif" font-size="8" fill="#333">Embeddings</text>
+  <text x="1285" y="170" font-family="Arial, sans-serif" font-size="8" fill="#333">1024-dim</text>
 
   <!-- Features -->
-  <rect x="990" y="205" width="360" height="60" rx="5" fill="white" stroke="#D4A574" stroke-width="1"/>
-  <text x="1170" y="225" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#B8956C" text-anchor="middle">Capabilities</text>
-  <text x="1000" y="243" font-family="Arial, sans-serif" font-size="10" fill="#333">• Converse API (Streaming) • 200K Context Window • Vision (Images/PDFs)</text>
-  <text x="1000" y="258" font-family="Arial, sans-serif" font-size="10" fill="#333">• Extended Thinking • Tool Use • Artifact Generation • Web Search</text>
+  <rect x="990" y="190" width="360" height="55" rx="5" fill="white" stroke="#D4A574" stroke-width="1"/>
+  <text x="1170" y="210" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#B8956C" text-anchor="middle">Capabilities</text>
+  <text x="1000" y="227" font-family="Arial, sans-serif" font-size="9" fill="#333">• Converse API (Streaming) • 200K Context Window • Vision</text>
+  <text x="1000" y="240" font-family="Arial, sans-serif" font-size="9" fill="#333">• Extended Thinking • Tool Use • Web Search • Artifacts</text>
+
+  <!-- ==================== DUAL-SCOPE MEMORY SYSTEM ==================== -->
+  <rect x="970" y="275" width="400" height="160" rx="10" fill="#E0F7FA" stroke="#00BCD4" stroke-width="3" filter="url(#shadow)"/>
+  <rect x="970" y="275" width="400" height="35" rx="10" fill="url(#memoryGrad)"/>
+  <text x="1170" y="298" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">DUAL-SCOPE MEMORY SYSTEM</text>
+
+  <!-- Global Memory -->
+  <rect x="990" y="320" width="180" height="100" rx="5" fill="white" stroke="#00BCD4" stroke-width="2"/>
+  <text x="1080" y="340" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#0097A7" text-anchor="middle">GLOBAL (User-Level)</text>
+  <text x="1000" y="358" font-family="Arial, sans-serif" font-size="9" fill="#333">Index: global-memories</text>
+  <text x="1000" y="372" font-family="Arial, sans-serif" font-size="9" fill="#333">Index: global-conversations</text>
+  <text x="1000" y="386" font-family="Arial, sans-serif" font-size="9" fill="#333">• User facts + preferences</text>
+  <text x="1000" y="400" font-family="Arial, sans-serif" font-size="9" fill="#333">• filter: user_id = userId</text>
+  <text x="1000" y="414" font-family="Arial, sans-serif" font-size="9" fill="#666">Used when: NO project</text>
+
+  <!-- Project Memory -->
+  <rect x="1180" y="320" width="180" height="100" rx="5" fill="white" stroke="#00BCD4" stroke-width="2"/>
+  <text x="1270" y="340" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#0097A7" text-anchor="middle">PROJECT (Scoped)</text>
+  <text x="1190" y="358" font-family="Arial, sans-serif" font-size="9" fill="#333">Index: {projectId}-mem</text>
+  <text x="1190" y="372" font-family="Arial, sans-serif" font-size="9" fill="#333">Index: {projectId}-conv</text>
+  <text x="1190" y="386" font-family="Arial, sans-serif" font-size="9" fill="#333">• Project-specific facts</text>
+  <text x="1190" y="400" font-family="Arial, sans-serif" font-size="9" fill="#333">• 6-section synthesized</text>
+  <text x="1190" y="414" font-family="Arial, sans-serif" font-size="9" fill="#666">Used when: IN project</text>
 
   <!-- ==================== DATA LAYER ==================== -->
-  <rect x="970" y="300" width="400" height="180" rx="10" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2" filter="url(#shadow)"/>
-  <rect x="970" y="300" width="400" height="35" rx="10" fill="url(#dynamoGrad)"/>
-  <text x="1170" y="323" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">DYNAMODB (On-Demand)</text>
+  <rect x="30" y="450" width="400" height="150" rx="10" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2" filter="url(#shadow)"/>
+  <rect x="30" y="450" width="400" height="35" rx="10" fill="url(#dynamoGrad)"/>
+  <text x="230" y="473" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">DYNAMODB (On-Demand)</text>
 
   <!-- Tables -->
-  <rect x="990" y="350" width="115" height="55" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
-  <text x="1047" y="368" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#2D3AA8" text-anchor="middle">USERS</text>
-  <text x="1000" y="383" font-family="Arial, sans-serif" font-size="8" fill="#333">PK: userId</text>
-  <text x="1000" y="395" font-family="Arial, sans-serif" font-size="8" fill="#333">GSI: username, email</text>
+  <rect x="50" y="495" width="85" height="45" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
+  <text x="92" y="512" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#2D3AA8" text-anchor="middle">USERS</text>
+  <text x="58" y="525" font-family="Arial, sans-serif" font-size="7" fill="#333">PK: userId</text>
+  <text x="58" y="535" font-family="Arial, sans-serif" font-size="7" fill="#333">GSI: username</text>
 
-  <rect x="1115" y="350" width="115" height="55" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
-  <text x="1172" y="368" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#2D3AA8" text-anchor="middle">SESSIONS</text>
-  <text x="1125" y="383" font-family="Arial, sans-serif" font-size="8" fill="#333">PK: userId+sessionId</text>
-  <text x="1125" y="395" font-family="Arial, sans-serif" font-size="8" fill="#333">GSI: projectId</text>
+  <rect x="145" y="495" width="85" height="45" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
+  <text x="187" y="512" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#2D3AA8" text-anchor="middle">SESSIONS</text>
+  <text x="153" y="525" font-family="Arial, sans-serif" font-size="7" fill="#333">PK: userId+sessId</text>
+  <text x="153" y="535" font-family="Arial, sans-serif" font-size="7" fill="#333">GSI: projectId</text>
 
-  <rect x="1240" y="350" width="115" height="55" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
-  <text x="1297" y="368" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#2D3AA8" text-anchor="middle">MESSAGES</text>
-  <text x="1250" y="383" font-family="Arial, sans-serif" font-size="8" fill="#333">PK: sessionId+msgId</text>
-  <text x="1250" y="395" font-family="Arial, sans-serif" font-size="8" fill="#333">role, content, files</text>
+  <rect x="240" y="495" width="85" height="45" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
+  <text x="282" y="512" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#2D3AA8" text-anchor="middle">MESSAGES</text>
+  <text x="248" y="525" font-family="Arial, sans-serif" font-size="7" fill="#333">PK: sessId+msgId</text>
+  <text x="248" y="535" font-family="Arial, sans-serif" font-size="7" fill="#333">role, content</text>
 
-  <rect x="990" y="415" width="115" height="55" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
-  <text x="1047" y="433" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#2D3AA8" text-anchor="middle">PROJECTS</text>
-  <text x="1000" y="448" font-family="Arial, sans-serif" font-size="8" fill="#333">PK: userId+projectId</text>
-  <text x="1000" y="460" font-family="Arial, sans-serif" font-size="8" fill="#333">instructions, memory</text>
+  <rect x="335" y="495" width="85" height="45" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
+  <text x="377" y="512" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#2D3AA8" text-anchor="middle">PROJECTS</text>
+  <text x="343" y="525" font-family="Arial, sans-serif" font-size="7" fill="#333">PK: userId+projId</text>
+  <text x="343" y="535" font-family="Arial, sans-serif" font-size="7" fill="#333">instructions</text>
 
-  <rect x="1115" y="415" width="115" height="55" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
-  <text x="1172" y="433" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#2D3AA8" text-anchor="middle">ARTIFACTS</text>
-  <text x="1125" y="448" font-family="Arial, sans-serif" font-size="8" fill="#333">PK: sessionId+artId</text>
-  <text x="1125" y="460" font-family="Arial, sans-serif" font-size="8" fill="#333">type, version, s3Key</text>
+  <rect x="50" y="548" width="85" height="45" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
+  <text x="92" y="565" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#2D3AA8" text-anchor="middle">ARTIFACTS</text>
+  <text x="58" y="578" font-family="Arial, sans-serif" font-size="7" fill="#333">PK: sessId+artId</text>
+  <text x="58" y="588" font-family="Arial, sans-serif" font-size="7" fill="#333">type, version</text>
 
-  <rect x="1240" y="415" width="115" height="55" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
-  <text x="1297" y="433" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#2D3AA8" text-anchor="middle">SUMMARIES</text>
-  <text x="1250" y="448" font-family="Arial, sans-serif" font-size="8" fill="#333">PK: sessionId</text>
-  <text x="1250" y="460" font-family="Arial, sans-serif" font-size="8" fill="#333">TTL: 7 days</text>
+  <rect x="145" y="548" width="85" height="45" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
+  <text x="187" y="565" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#2D3AA8" text-anchor="middle">SUMMARIES</text>
+  <text x="153" y="578" font-family="Arial, sans-serif" font-size="7" fill="#333">PK: sessionId</text>
+  <text x="153" y="588" font-family="Arial, sans-serif" font-size="7" fill="#333">TTL: 7 days</text>
+
+  <rect x="240" y="548" width="85" height="45" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
+  <text x="282" y="565" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#2D3AA8" text-anchor="middle">PROJ_FILES</text>
+  <text x="248" y="578" font-family="Arial, sans-serif" font-size="7" fill="#333">PK: projId+fileId</text>
+  <text x="248" y="588" font-family="Arial, sans-serif" font-size="7" fill="#333">pinned, tokens</text>
+
+  <rect x="335" y="548" width="85" height="45" rx="5" fill="white" stroke="#4053D6" stroke-width="1"/>
+  <text x="377" y="565" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#2D3AA8" text-anchor="middle">PROJ_MEM</text>
+  <text x="343" y="578" font-family="Arial, sans-serif" font-size="7" fill="#333">PK: projId+ver</text>
+  <text x="343" y="588" font-family="Arial, sans-serif" font-size="7" fill="#333">6 sections</text>
 
   <!-- ==================== S3 STORAGE ==================== -->
-  <rect x="970" y="500" width="400" height="130" rx="10" fill="#E8F5E9" stroke="#569A31" stroke-width="2" filter="url(#shadow)"/>
-  <rect x="970" y="500" width="400" height="35" rx="10" fill="url(#s3Grad)"/>
-  <text x="1170" y="523" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">AMAZON S3</text>
+  <rect x="460" y="450" width="250" height="150" rx="10" fill="#E8F5E9" stroke="#569A31" stroke-width="2" filter="url(#shadow)"/>
+  <rect x="460" y="450" width="250" height="35" rx="10" fill="url(#s3Grad)"/>
+  <text x="585" y="473" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">AMAZON S3</text>
 
-  <rect x="990" y="550" width="175" height="65" rx="5" fill="white" stroke="#569A31" stroke-width="1"/>
-  <text x="1077" y="568" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#3D7A1F" text-anchor="middle">UPLOADS_BUCKET</text>
-  <text x="1000" y="586" font-family="Arial, sans-serif" font-size="9" fill="#333">projects/{id}/files/</text>
-  <text x="1000" y="600" font-family="Arial, sans-serif" font-size="9" fill="#333">sessions/{id}/uploads/</text>
+  <rect x="480" y="495" width="100" height="55" rx="5" fill="white" stroke="#569A31" stroke-width="1"/>
+  <text x="530" y="513" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#3D7A1F" text-anchor="middle">UPLOADS</text>
+  <text x="488" y="528" font-family="Arial, sans-serif" font-size="8" fill="#333">projects/{id}/files/</text>
+  <text x="488" y="542" font-family="Arial, sans-serif" font-size="8" fill="#333">sessions/{id}/</text>
 
-  <rect x="1180" y="550" width="175" height="65" rx="5" fill="white" stroke="#569A31" stroke-width="1"/>
-  <text x="1267" y="568" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#3D7A1F" text-anchor="middle">ARTIFACTS_BUCKET</text>
-  <text x="1190" y="586" font-family="Arial, sans-serif" font-size="9" fill="#333">{userId}/{sessionId}/</text>
-  <text x="1190" y="600" font-family="Arial, sans-serif" font-size="9" fill="#333">{artifactId}.{ext}</text>
+  <rect x="590" y="495" width="100" height="55" rx="5" fill="white" stroke="#569A31" stroke-width="1"/>
+  <text x="640" y="513" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#3D7A1F" text-anchor="middle">ARTIFACTS</text>
+  <text x="598" y="528" font-family="Arial, sans-serif" font-size="8" fill="#333">{userId}/{sessId}/</text>
+  <text x="598" y="542" font-family="Arial, sans-serif" font-size="8" fill="#333">{artifactId}.ext</text>
+
+  <!-- ==================== S3 VECTORS ==================== -->
+  <rect x="740" y="450" width="270" height="150" rx="10" fill="#F3E5F5" stroke="#9C27B0" stroke-width="3" filter="url(#shadow)"/>
+  <rect x="740" y="450" width="270" height="35" rx="10" fill="url(#vectorGrad)"/>
+  <text x="875" y="473" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">S3 VECTORS (1024-dim)</text>
+
+  <!-- Global Indexes -->
+  <rect x="760" y="495" width="115" height="95" rx="5" fill="white" stroke="#9C27B0" stroke-width="2"/>
+  <text x="817" y="513" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#7B1FA2" text-anchor="middle">GLOBAL INDEXES</text>
+  <text x="768" y="530" font-family="Arial, sans-serif" font-size="8" fill="#333">• global-memories</text>
+  <text x="768" y="544" font-family="Arial, sans-serif" font-size="8" fill="#333">• global-conversations</text>
+  <text x="768" y="560" font-family="Arial, sans-serif" font-size="8" fill="#666">Shared, user_id filter</text>
+  <text x="768" y="576" font-family="Arial, sans-serif" font-size="8" fill="#666">Tenant isolation</text>
+
+  <!-- Project Indexes -->
+  <rect x="885" y="495" width="115" height="95" rx="5" fill="white" stroke="#9C27B0" stroke-width="2"/>
+  <text x="942" y="513" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#7B1FA2" text-anchor="middle">PROJECT INDEXES</text>
+  <text x="893" y="530" font-family="Arial, sans-serif" font-size="8" fill="#333">• {projectId}-mem</text>
+  <text x="893" y="544" font-family="Arial, sans-serif" font-size="8" fill="#333">• {projectId}-conv</text>
+  <text x="893" y="560" font-family="Arial, sans-serif" font-size="8" fill="#666">Per-project isolation</text>
+  <text x="893" y="576" font-family="Arial, sans-serif" font-size="8" fill="#666">2 indexes/project</text>
 
   <!-- ==================== OPTIONAL SERVICES ==================== -->
-  <rect x="30" y="500" width="400" height="130" rx="10" fill="#F3E5F5" stroke="#9C27B0" stroke-width="2" stroke-dasharray="5,5" filter="url(#shadow)"/>
-  <rect x="30" y="500" width="400" height="35" rx="10" fill="#9C27B0"/>
-  <text x="230" y="523" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">OPTIONAL SERVICES</text>
+  <rect x="1040" y="450" width="330" height="150" rx="10" fill="#F3E5F5" stroke="#9C27B0" stroke-width="2" stroke-dasharray="5,5" filter="url(#shadow)"/>
+  <rect x="1040" y="450" width="330" height="35" rx="10" fill="#9C27B0"/>
+  <text x="1205" y="473" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">OPTIONAL SERVICES</text>
 
-  <rect x="50" y="550" width="115" height="65" rx="5" fill="white" stroke="#9C27B0" stroke-width="1" stroke-dasharray="3,3"/>
-  <text x="107" y="570" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#7B1FA2" text-anchor="middle">Neo4j</text>
-  <text x="60" y="588" font-family="Arial, sans-serif" font-size="9" fill="#666">Knowledge Core</text>
-  <text x="60" y="602" font-family="Arial, sans-serif" font-size="9" fill="#666">Graph Database</text>
+  <rect x="1060" y="495" width="95" height="55" rx="5" fill="white" stroke="#9C27B0" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="1107" y="515" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#7B1FA2" text-anchor="middle">Neo4j</text>
+  <text x="1068" y="532" font-family="Arial, sans-serif" font-size="8" fill="#666">Knowledge Core</text>
+  <text x="1068" y="544" font-family="Arial, sans-serif" font-size="8" fill="#666">Graph DB</text>
 
-  <rect x="175" y="550" width="115" height="65" rx="5" fill="white" stroke="#9C27B0" stroke-width="1" stroke-dasharray="3,3"/>
-  <text x="232" y="570" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#7B1FA2" text-anchor="middle">OpenSearch</text>
-  <text x="185" y="588" font-family="Arial, sans-serif" font-size="9" fill="#666">Full-text Search</text>
-  <text x="185" y="602" font-family="Arial, sans-serif" font-size="9" fill="#666">Vector Search</text>
+  <rect x="1165" y="495" width="95" height="55" rx="5" fill="white" stroke="#9C27B0" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="1212" y="515" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#7B1FA2" text-anchor="middle">OpenSearch</text>
+  <text x="1173" y="532" font-family="Arial, sans-serif" font-size="8" fill="#666">Full-text</text>
+  <text x="1173" y="544" font-family="Arial, sans-serif" font-size="8" fill="#666">Vector Search</text>
 
-  <rect x="300" y="550" width="115" height="65" rx="5" fill="white" stroke="#9C27B0" stroke-width="1" stroke-dasharray="3,3"/>
-  <text x="357" y="570" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#7B1FA2" text-anchor="middle">MCP Servers</text>
-  <text x="310" y="588" font-family="Arial, sans-serif" font-size="9" fill="#666">Confluence, Jira</text>
-  <text x="310" y="602" font-family="Arial, sans-serif" font-size="9" fill="#666">GitLab, Slack</text>
+  <rect x="1270" y="495" width="90" height="55" rx="5" fill="white" stroke="#9C27B0" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="1315" y="515" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#7B1FA2" text-anchor="middle">MCP</text>
+  <text x="1278" y="532" font-family="Arial, sans-serif" font-size="8" fill="#666">Confluence</text>
+  <text x="1278" y="544" font-family="Arial, sans-serif" font-size="8" fill="#666">Jira, GitLab</text>
 
   <!-- ==================== DATA FLOW SECTION ==================== -->
-  <rect x="30" y="650" width="1340" height="200" rx="10" fill="#ECEFF1" stroke="#607D8B" stroke-width="2" filter="url(#shadow)"/>
-  <rect x="30" y="650" width="1340" height="35" rx="10" fill="#607D8B"/>
-  <text x="700" y="673" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">DATA FLOW: Chat Message with Streaming Response</text>
+  <rect x="30" y="620" width="1340" height="280" rx="10" fill="#ECEFF1" stroke="#607D8B" stroke-width="2" filter="url(#shadow)"/>
+  <rect x="30" y="620" width="1340" height="35" rx="10" fill="#607D8B"/>
+  <text x="700" y="643" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">DATA FLOW: Chat Message with Dual-Scope Memory Retrieval</text>
 
   <!-- Flow Steps -->
-  <rect x="50" y="700" width="180" height="60" rx="5" fill="#E3F2FD" stroke="#1976D2" stroke-width="1"/>
-  <text x="140" y="720" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#1565C0" text-anchor="middle">1. User Input</text>
-  <text x="60" y="738" font-family="Arial, sans-serif" font-size="9" fill="#333">Message + Files + Toggles</text>
-  <text x="60" y="750" font-family="Arial, sans-serif" font-size="9" fill="#333">(KC, Thinking, Search)</text>
+  <rect x="50" y="670" width="145" height="60" rx="5" fill="#E3F2FD" stroke="#1976D2" stroke-width="1"/>
+  <text x="122" y="690" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#1565C0" text-anchor="middle">1. User Input</text>
+  <text x="58" y="706" font-family="Arial, sans-serif" font-size="8" fill="#333">Message + Files</text>
+  <text x="58" y="718" font-family="Arial, sans-serif" font-size="8" fill="#333">+ project_id (optional)</text>
 
-  <rect x="260" y="700" width="180" height="60" rx="5" fill="#FFF3E0" stroke="#FF9900" stroke-width="1"/>
-  <text x="350" y="720" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#E65100" text-anchor="middle">2. Context Assembly</text>
-  <text x="270" y="738" font-family="Arial, sans-serif" font-size="9" fill="#333">Project Memory + Pinned Files</text>
-  <text x="270" y="750" font-family="Arial, sans-serif" font-size="9" fill="#333">+ History (Compacted if &gt;160K)</text>
+  <rect x="210" y="670" width="145" height="60" rx="5" fill="#E0F7FA" stroke="#00BCD4" stroke-width="2"/>
+  <text x="282" y="690" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#0097A7" text-anchor="middle">2. Scope Check</text>
+  <text x="218" y="706" font-family="Arial, sans-serif" font-size="8" fill="#333">project_id present?</text>
+  <text x="218" y="718" font-family="Arial, sans-serif" font-size="8" fill="#333">→ Global OR Project</text>
 
-  <rect x="470" y="700" width="180" height="60" rx="5" fill="#FBE9E7" stroke="#D4A574" stroke-width="1"/>
-  <text x="560" y="720" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#BF360C" text-anchor="middle">3. Claude Processing</text>
-  <text x="480" y="738" font-family="Arial, sans-serif" font-size="9" fill="#333">Bedrock Converse API</text>
-  <text x="480" y="750" font-family="Arial, sans-serif" font-size="9" fill="#333">Streaming + Tool Use</text>
+  <rect x="370" y="670" width="145" height="60" rx="5" fill="#F3E5F5" stroke="#9C27B0" stroke-width="2"/>
+  <text x="442" y="690" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#7B1FA2" text-anchor="middle">3. Memory Search</text>
+  <text x="378" y="706" font-family="Arial, sans-serif" font-size="8" fill="#333">S3 Vectors query</text>
+  <text x="378" y="718" font-family="Arial, sans-serif" font-size="8" fill="#333">Titan embeddings</text>
 
-  <rect x="680" y="700" width="180" height="60" rx="5" fill="#FFF3E0" stroke="#FF9900" stroke-width="1"/>
-  <text x="770" y="720" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#E65100" text-anchor="middle">4. Stream Events</text>
-  <text x="690" y="738" font-family="Arial, sans-serif" font-size="9" fill="#333">chunk, thinking, artifact_*</text>
-  <text x="690" y="750" font-family="Arial, sans-serif" font-size="9" fill="#333">search_*, compaction, done</text>
+  <rect x="530" y="670" width="145" height="60" rx="5" fill="#FFF3E0" stroke="#FF9900" stroke-width="1"/>
+  <text x="602" y="690" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#E65100" text-anchor="middle">4. Context Build</text>
+  <text x="538" y="706" font-family="Arial, sans-serif" font-size="8" fill="#333">System prompt +</text>
+  <text x="538" y="718" font-family="Arial, sans-serif" font-size="8" fill="#333">Memory + History</text>
 
-  <rect x="890" y="700" width="180" height="60" rx="5" fill="#E3F2FD" stroke="#1976D2" stroke-width="1"/>
-  <text x="980" y="720" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#1565C0" text-anchor="middle">5. UI Rendering</text>
-  <text x="900" y="738" font-family="Arial, sans-serif" font-size="9" fill="#333">Real-time message display</text>
-  <text x="900" y="750" font-family="Arial, sans-serif" font-size="9" fill="#333">Artifact panel auto-open</text>
+  <rect x="690" y="670" width="145" height="60" rx="5" fill="#FBE9E7" stroke="#D4A574" stroke-width="1"/>
+  <text x="762" y="690" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#BF360C" text-anchor="middle">5. Claude Process</text>
+  <text x="698" y="706" font-family="Arial, sans-serif" font-size="8" fill="#333">Bedrock Converse</text>
+  <text x="698" y="718" font-family="Arial, sans-serif" font-size="8" fill="#333">Streaming + Tools</text>
 
-  <rect x="1100" y="700" width="180" height="60" rx="5" fill="#E8F5E9" stroke="#4CAF50" stroke-width="1"/>
-  <text x="1190" y="720" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#2E7D32" text-anchor="middle">6. Persistence</text>
-  <text x="1110" y="738" font-family="Arial, sans-serif" font-size="9" fill="#333">DynamoDB: messages, artifacts</text>
-  <text x="1110" y="750" font-family="Arial, sans-serif" font-size="9" fill="#333">S3: files, artifact content</text>
+  <rect x="850" y="670" width="145" height="60" rx="5" fill="#FFF3E0" stroke="#FF9900" stroke-width="1"/>
+  <text x="922" y="690" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#E65100" text-anchor="middle">6. Stream Events</text>
+  <text x="858" y="706" font-family="Arial, sans-serif" font-size="8" fill="#333">chunk, thinking</text>
+  <text x="858" y="718" font-family="Arial, sans-serif" font-size="8" fill="#333">memory_context, done</text>
+
+  <rect x="1010" y="670" width="145" height="60" rx="5" fill="#E3F2FD" stroke="#1976D2" stroke-width="1"/>
+  <text x="1082" y="690" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#1565C0" text-anchor="middle">7. UI Render</text>
+  <text x="1018" y="706" font-family="Arial, sans-serif" font-size="8" fill="#333">Message display</text>
+  <text x="1018" y="718" font-family="Arial, sans-serif" font-size="8" fill="#333">Artifact panel</text>
+
+  <rect x="1170" y="670" width="145" height="60" rx="5" fill="#F3E5F5" stroke="#9C27B0" stroke-width="2"/>
+  <text x="1242" y="690" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#7B1FA2" text-anchor="middle">8. Memory Store</text>
+  <text x="1178" y="706" font-family="Arial, sans-serif" font-size="8" fill="#333">Extract facts (Haiku)</text>
+  <text x="1178" y="718" font-family="Arial, sans-serif" font-size="8" fill="#333">Dedupe + Store</text>
 
   <!-- Flow Arrows -->
-  <line x1="230" y1="730" x2="258" y2="730" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
-  <line x1="440" y1="730" x2="468" y2="730" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
-  <line x1="650" y1="730" x2="678" y2="730" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
-  <line x1="860" y1="730" x2="888" y2="730" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
-  <line x1="1070" y1="730" x2="1098" y2="730" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="195" y1="700" x2="208" y2="700" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="355" y1="700" x2="368" y2="700" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="515" y1="700" x2="528" y2="700" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="675" y1="700" x2="688" y2="700" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="835" y1="700" x2="848" y2="700" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="995" y1="700" x2="1008" y2="700" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="1155" y1="700" x2="1168" y2="700" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
 
   <!-- Token Budget Box -->
-  <rect x="50" y="775" width="250" height="60" rx="5" fill="white" stroke="#607D8B" stroke-width="1"/>
-  <text x="175" y="795" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#455A64" text-anchor="middle">Token Budget (200K Total)</text>
-  <text x="60" y="812" font-family="Arial, sans-serif" font-size="9" fill="#333">System: 5K | Memory: 15K | Files: 50K</text>
-  <text x="60" y="825" font-family="Arial, sans-serif" font-size="9" fill="#333">History: 100K | Reserve: 30K</text>
+  <rect x="50" y="745" width="200" height="65" rx="5" fill="white" stroke="#607D8B" stroke-width="1"/>
+  <text x="150" y="763" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#455A64" text-anchor="middle">Token Budget (200K)</text>
+  <text x="58" y="780" font-family="Arial, sans-serif" font-size="8" fill="#333">System: 5K | Files: 50K | History: 90K</text>
+  <text x="58" y="793" font-family="Arial, sans-serif" font-size="8" fill="#333">Global Mem: 10K | Project Mem: 10K</text>
+  <text x="58" y="806" font-family="Arial, sans-serif" font-size="8" fill="#333">Reserve: 18K | File Manifest: 2K</text>
 
-  <!-- Compaction Box -->
-  <rect x="320" y="775" width="250" height="60" rx="5" fill="white" stroke="#607D8B" stroke-width="1"/>
-  <text x="445" y="795" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#455A64" text-anchor="middle">Compaction (80% Threshold)</text>
-  <text x="330" y="812" font-family="Arial, sans-serif" font-size="9" fill="#333">Oldest 50% → Key Points</text>
-  <text x="330" y="825" font-family="Arial, sans-serif" font-size="9" fill="#333">Middle 25% → Summary | Recent 25% → Preserved</text>
+  <!-- Memory Context Box -->
+  <rect x="270" y="745" width="200" height="65" rx="5" fill="#E0F7FA" stroke="#00BCD4" stroke-width="2"/>
+  <text x="370" y="763" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#0097A7" text-anchor="middle">Memory Context Event</text>
+  <text x="278" y="780" font-family="Arial, sans-serif" font-size="8" fill="#333">scope: 'global' | 'project'</text>
+  <text x="278" y="793" font-family="Arial, sans-serif" font-size="8" fill="#333">globalMemoryCount: N</text>
+  <text x="278" y="806" font-family="Arial, sans-serif" font-size="8" fill="#333">projectMemoryCount: N</text>
 
-  <!-- Streaming Events Box -->
-  <rect x="590" y="775" width="250" height="60" rx="5" fill="white" stroke="#607D8B" stroke-width="1"/>
-  <text x="715" y="795" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#455A64" text-anchor="middle">SSE Event Types</text>
-  <text x="600" y="812" font-family="Arial, sans-serif" font-size="9" fill="#333">chunk, thinking, compaction, done, error</text>
-  <text x="600" y="825" font-family="Arial, sans-serif" font-size="9" fill="#333">artifact_start/delta/complete, search_*</text>
+  <!-- SSE Events Box -->
+  <rect x="490" y="745" width="200" height="65" rx="5" fill="white" stroke="#607D8B" stroke-width="1"/>
+  <text x="590" y="763" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#455A64" text-anchor="middle">SSE Event Types</text>
+  <text x="498" y="780" font-family="Arial, sans-serif" font-size="8" fill="#333">chunk, thinking, compaction</text>
+  <text x="498" y="793" font-family="Arial, sans-serif" font-size="8" fill="#333">artifact_*, memory_context</text>
+  <text x="498" y="806" font-family="Arial, sans-serif" font-size="8" fill="#333">search_*, done, error</text>
 
-  <!-- Artifact Types Box -->
-  <rect x="860" y="775" width="250" height="60" rx="5" fill="white" stroke="#607D8B" stroke-width="1"/>
-  <text x="985" y="795" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#455A64" text-anchor="middle">Supported Artifacts</text>
-  <text x="870" y="812" font-family="Arial, sans-serif" font-size="9" fill="#333">HTML, Markdown, SVG, Mermaid, React</text>
-  <text x="870" y="825" font-family="Arial, sans-serif" font-size="9" fill="#333">JS, TS, Python, JSON, CSV, SQL, YAML</text>
+  <!-- Memory Deduplication Box -->
+  <rect x="710" y="745" width="200" height="65" rx="5" fill="#F3E5F5" stroke="#9C27B0" stroke-width="2"/>
+  <text x="810" y="763" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#7B1FA2" text-anchor="middle">Memory Deduplication</text>
+  <text x="718" y="780" font-family="Arial, sans-serif" font-size="8" fill="#333">Similarity threshold: 92%</text>
+  <text x="718" y="793" font-family="Arial, sans-serif" font-size="8" fill="#333">Merge: increment mention_count</text>
+  <text x="718" y="806" font-family="Arial, sans-serif" font-size="8" fill="#333">New: insert with count=1</text>
 
-  <!-- Version Info -->
-  <rect x="1130" y="775" width="150" height="60" rx="5" fill="white" stroke="#607D8B" stroke-width="1"/>
-  <text x="1205" y="795" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#455A64" text-anchor="middle">Infrastructure</text>
-  <text x="1140" y="812" font-family="Arial, sans-serif" font-size="9" fill="#333">Terraform IaC</text>
-  <text x="1140" y="825" font-family="Arial, sans-serif" font-size="9" fill="#333">Serverless (Pay-per-use)</text>
+  <!-- Tenant Isolation Box -->
+  <rect x="930" y="745" width="200" height="65" rx="5" fill="#FFEBEE" stroke="#F44336" stroke-width="2"/>
+  <text x="1030" y="763" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#C62828" text-anchor="middle">Tenant Isolation</text>
+  <text x="938" y="780" font-family="Arial, sans-serif" font-size="8" fill="#333">Global: filter: user_id=$eq</text>
+  <text x="938" y="793" font-family="Arial, sans-serif" font-size="8" fill="#333">Project: index name isolation</text>
+  <text x="938" y="806" font-family="Arial, sans-serif" font-size="8" fill="#333">GDPR: deleteUserGlobalData()</text>
+
+  <!-- Infrastructure Box -->
+  <rect x="1150" y="745" width="165" height="65" rx="5" fill="white" stroke="#607D8B" stroke-width="1"/>
+  <text x="1232" y="763" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#455A64" text-anchor="middle">Infrastructure</text>
+  <text x="1158" y="780" font-family="Arial, sans-serif" font-size="8" fill="#333">Terraform IaC</text>
+  <text x="1158" y="793" font-family="Arial, sans-serif" font-size="8" fill="#333">Serverless (Pay-per-use)</text>
+  <text x="1158" y="806" font-family="Arial, sans-serif" font-size="8" fill="#333">~$9-150/month</text>
+
+  <!-- Memory Scope Decision Diagram -->
+  <rect x="50" y="825" width="440" height="60" rx="5" fill="#E0F7FA" stroke="#00BCD4" stroke-width="2"/>
+  <text x="270" y="843" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#0097A7" text-anchor="middle">MEMORY SCOPE DECISION FLOW</text>
+  <text x="270" y="863" font-family="Arial, sans-serif" font-size="9" fill="#333" text-anchor="middle">User Message → Check project_id → [Has Project?] → YES: Search {projectId}-mem/conv</text>
+  <text x="270" y="878" font-family="Arial, sans-serif" font-size="9" fill="#333" text-anchor="middle">                                                    → NO: Search global-memories/conversations with user_id filter</text>
+
+  <!-- System Prompt Injection -->
+  <rect x="510" y="825" width="430" height="60" rx="5" fill="white" stroke="#607D8B" stroke-width="1"/>
+  <text x="725" y="843" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#455A64" text-anchor="middle">SYSTEM PROMPT INJECTION</text>
+  <text x="518" y="863" font-family="Arial, sans-serif" font-size="9" fill="#333">Global: &lt;user_memory&gt; + &lt;relevant_past_conversations&gt;</text>
+  <text x="518" y="878" font-family="Arial, sans-serif" font-size="9" fill="#333">Project: &lt;project_memory&gt; (6 sections) + &lt;relevant_project_conversations&gt;</text>
+
+  <!-- Memory Deletion Behavior -->
+  <rect x="960" y="825" width="355" height="60" rx="5" fill="#FFEBEE" stroke="#F44336" stroke-width="1"/>
+  <text x="1137" y="843" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#C62828" text-anchor="middle">MEMORY DELETION BEHAVIOR</text>
+  <text x="968" y="863" font-family="Arial, sans-serif" font-size="9" fill="#333">Session Del (Global): deleteSessionGlobalData() → chunks + facts</text>
+  <text x="968" y="878" font-family="Arial, sans-serif" font-size="9" fill="#333">Project Del: deleteProjectIndexes() → entire {projectId}-* indexes</text>
 
   <!-- ==================== CONNECTION ARROWS ==================== -->
   <!-- Frontend to API Gateway -->
-  <path d="M 230 360 L 230 378" stroke="#1976D2" stroke-width="2" marker-end="url(#arrowheadBlue)" fill="none"/>
-  <text x="240" y="372" font-family="Arial, sans-serif" font-size="9" fill="#1976D2">HTTPS</text>
+  <path d="M 230 340 L 230 353" stroke="#1976D2" stroke-width="2" marker-end="url(#arrowheadBlue)" fill="none"/>
+  <text x="240" y="350" font-family="Arial, sans-serif" font-size="9" fill="#1976D2">HTTPS</text>
 
   <!-- API Gateway to Lambda -->
-  <path d="M 430 430 L 458 430" stroke="#FF9900" stroke-width="2" marker-end="url(#arrowheadOrange)" fill="none"/>
+  <path d="M 430 395 L 458 395" stroke="#FF9900" stroke-width="2" marker-end="url(#arrowheadOrange)" fill="none"/>
 
   <!-- Lambda to Bedrock -->
-  <path d="M 770 280 L 968 180" stroke="#D4A574" stroke-width="2" marker-end="url(#arrowhead)" fill="none"/>
-  <text x="870" y="220" font-family="Arial, sans-serif" font-size="9" fill="#B8956C">Converse API</text>
+  <path d="M 770 250 L 968 180" stroke="#D4A574" stroke-width="2" marker-end="url(#arrowhead)" fill="none"/>
+  <text x="870" y="205" font-family="Arial, sans-serif" font-size="9" fill="#B8956C">Converse API</text>
+
+  <!-- Lambda to Memory System -->
+  <path d="M 770 300 L 968 340" stroke="#00BCD4" stroke-width="2" marker-end="url(#arrowhead)" fill="none"/>
+  <text x="860" y="330" font-family="Arial, sans-serif" font-size="9" fill="#0097A7">Memory Query</text>
 
   <!-- Lambda to DynamoDB -->
-  <path d="M 940 400 L 988 400" stroke="#4053D6" stroke-width="2" marker-end="url(#arrowhead)" fill="none"/>
+  <path d="M 460 410 L 350 435 L 350 448" stroke="#4053D6" stroke-width="2" marker-end="url(#arrowhead)" fill="none"/>
 
   <!-- Lambda to S3 -->
-  <path d="M 920 450 L 920 520 L 988 520" stroke="#569A31" stroke-width="2" marker-end="url(#arrowhead)" fill="none"/>
+  <path d="M 620 420 L 620 448" stroke="#569A31" stroke-width="2" marker-end="url(#arrowhead)" fill="none"/>
+
+  <!-- Lambda to S3 Vectors -->
+  <path d="M 860 420 L 860 448" stroke="#9C27B0" stroke-width="2" marker-end="url(#arrowheadPurple)" fill="none"/>
+
+  <!-- Memory Processor to S3 Vectors -->
+  <path d="M 850 370 L 850 380 L 900 380 L 900 448" stroke="#9C27B0" stroke-width="2" marker-end="url(#arrowheadPurple)" fill="none"/>
 
   <!-- Footer -->
-  <text x="700" y="880" font-family="Arial, sans-serif" font-size="12" fill="#666" text-anchor="middle">Atlas Platform v1.0 | AWS Serverless Architecture | Claude 4.5 AI Models</text>
-  <text x="700" y="895" font-family="Arial, sans-serif" font-size="10" fill="#999" text-anchor="middle">Generated: January 2026 | Documentation: PRODUCT_REQUIREMENTS.md</text>
+  <text x="700" y="920" font-family="Arial, sans-serif" font-size="12" fill="#666" text-anchor="middle">Atlas Platform v1.1 | AWS Serverless Architecture | Claude 4.5 + Titan Embeddings | Dual-Scope Memory</text>
+  <text x="700" y="938" font-family="Arial, sans-serif" font-size="10" fill="#999" text-anchor="middle">Generated: January 2026 | Documentation: PRODUCT_REQUIREMENTS.md</text>
 
 </svg>

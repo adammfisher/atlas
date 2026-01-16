@@ -31,6 +31,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
   const artifactContentRef = useRef('')
   // Local state for streaming artifact (for rendering inline card)
   const [currentStreamingArtifact, setCurrentStreamingArtifact] = useState(null)
+  // Track artifacts completed during current streaming session (for inline cards)
+  const [completedStreamingArtifacts, setCompletedStreamingArtifacts] = useState([])
   // AbortController for stopping streaming
   const abortControllerRef = useRef(null)
 
@@ -75,6 +77,13 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
       }
     }
   }, [sessionId, _hasHydrated, currentSessionId, setCurrentSession])
+
+  // Clear completed streaming artifacts when switching sessions
+  // These are session-specific and should not persist across chat switches
+  useEffect(() => {
+    setCompletedStreamingArtifacts([])
+    setCurrentStreamingArtifact(null)
+  }, [currentSessionId])
 
   // Load messages from backend when session changes and we don't have them locally
   useEffect(() => {
@@ -224,6 +233,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
     // Reset streaming artifact tracking
     streamingArtifactRef.current = null
     artifactContentRef.current = ''
+    // Reset completed streaming artifacts for new message
+    setCompletedStreamingArtifacts([])
     // Show steps panel for extended thinking OR web search
     setShowThinkingSteps(extendedThinkingEnabled || webSearchEnabled)
 
@@ -405,6 +416,9 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
           }
           console.log('[ChatView] Creating final artifact:', finalArtifact.id, 'title:', finalTitle, 'backendId:', backendId, 'content length:', content.length)
           onArtifactCreated(finalArtifact)
+          // Track completed artifact for inline card rendering
+          console.log('[ChatView] Adding to completedStreamingArtifacts:', finalArtifact.id)
+          setCompletedStreamingArtifacts(prev => [...prev, finalArtifact])
           console.log('[ChatView] Clearing streamingArtifactRef and artifactContentRef')
           streamingArtifactRef.current = null
           artifactContentRef.current = ''
@@ -559,6 +573,11 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
               state.buffer = ''
             }
 
+            // NOTE: We no longer replace message with fullResponseRef.current because:
+            // 1. fullResponseRef.current accumulates chunks which may contain partial/malformed artifact tags
+            // 2. The backend filters most artifact content but partial tags can leak through
+            // 3. Instead, we use completedStreamingArtifacts (from artifact_complete events) to render inline cards
+
             // If this was a new session, migrate temp session to backend session ID
             if (isNewSession && result.session_id && tempSessionId) {
               const backendSessionId = result.session_id
@@ -695,28 +714,10 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
               state.buffer = ''
             }
 
-            // Clean up displayed message - remove duplicates caused by backend
-            updateLastMessage(prev => {
-              // Extract artifact-free content and remove duplicate progressive lines
-              const lines = prev.split('\n')
-              const cleanedLines = []
-              for (const line of lines) {
-                // Skip if this line is a prefix of a later line we've already seen
-                const isDuplicate = cleanedLines.some(existing =>
-                  existing.startsWith(line) && existing !== line
-                )
-                if (!isDuplicate) {
-                  // Also skip if this line is just a longer version of the last line
-                  const lastLine = cleanedLines[cleanedLines.length - 1]
-                  if (lastLine && line.startsWith(lastLine)) {
-                    cleanedLines[cleanedLines.length - 1] = line
-                  } else {
-                    cleanedLines.push(line)
-                  }
-                }
-              }
-              return cleanedLines.join('\n')
-            })
+            // NOTE: We no longer replace message with fullResponseRef.current because:
+            // 1. fullResponseRef.current accumulates chunks which may contain partial/malformed artifact tags
+            // 2. The backend filters most artifact content but partial tags can leak through
+            // 3. Instead, we use completedStreamingArtifacts (from artifact_complete events) to render inline cards
 
             // If this was a new session, migrate temp session to backend session ID
             if (isNewSession && result.session_id && tempSessionId) {
@@ -870,19 +871,29 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
             </div>
           ) : (
             <div className="w-full pb-32 pt-4">
-              {messages.map((message, index) => (
-                <MessageBubble
-                  key={message.id || index}
-                  message={message}
-                  isStreaming={message.isStreaming && isStreaming}
-                  steps={message.role === 'assistant' ? message.thinkingSteps : null}
-                  showSteps={message.thinkingSteps && message.thinkingSteps.length > 0}
-                  fontFamily={fontFamilies[chatFont] || fontFamilies.default}
-                  onOpenArtifactInPanel={onOpenArtifactInPanel}
-                  onViewKnowledgeArtifact={handleViewKnowledgeArtifact}
-                  streamingArtifact={message.isStreaming ? currentStreamingArtifact : null}
-                />
-              ))}
+              {messages.map((message, index) => {
+                // Determine if this is the latest assistant message that just finished streaming
+                // (has completed streaming artifacts to render)
+                const isLatestAssistantMessage = message.role === 'assistant' &&
+                  index === messages.length - 1 &&
+                  !message.isStreaming
+                const artifactsForThisMessage = isLatestAssistantMessage ? completedStreamingArtifacts : []
+
+                return (
+                  <MessageBubble
+                    key={message.id || index}
+                    message={message}
+                    isStreaming={message.isStreaming && isStreaming}
+                    steps={message.role === 'assistant' ? message.thinkingSteps : null}
+                    showSteps={message.thinkingSteps && message.thinkingSteps.length > 0}
+                    fontFamily={fontFamilies[chatFont] || fontFamilies.default}
+                    onOpenArtifactInPanel={onOpenArtifactInPanel}
+                    onViewKnowledgeArtifact={handleViewKnowledgeArtifact}
+                    streamingArtifact={message.isStreaming ? currentStreamingArtifact : null}
+                    completedStreamingArtifacts={artifactsForThisMessage}
+                  />
+                )
+              })}
               <div ref={messagesEndRef} />
             </div>
           )}
@@ -927,12 +938,13 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
   )
 }
 
-function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onOpenArtifactInPanel, onViewKnowledgeArtifact, streamingArtifact }) {
+function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onOpenArtifactInPanel, onViewKnowledgeArtifact, streamingArtifact, completedStreamingArtifacts = [] }) {
   const isUser = message.role === 'user'
 
   // Parse message for artifacts (memoized to avoid re-parsing on every render)
   // CRITICAL: Skip parsing during streaming to avoid duplicate key issues
   // The streaming artifact is tracked separately via streamingArtifact prop
+  // Also use completedStreamingArtifacts if available (these come from artifact_complete events)
   const { artifacts, modifiedContent } = useMemo(() => {
     if (isUser || !message.content) {
       return { artifacts: [], modifiedContent: message.content || '' }
@@ -942,8 +954,19 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
     if (isStreaming) {
       return { artifacts: [], modifiedContent: message.content || '' }
     }
+    // If we have completed streaming artifacts, use those instead of parsing
+    // This handles the case where artifact tags leaked partially and can't be parsed
+    if (completedStreamingArtifacts && completedStreamingArtifacts.length > 0) {
+      // Clean any partial artifact tags from the content for display
+      let cleanedContent = message.content
+        .replace(/<artifact\s+[^>]*>[\s\S]*?<\/artifact>/gi, '') // Complete tags
+        .replace(/<artifact\s+[^>]*>[\s\S]*$/gi, '') // Incomplete tags (no closing)
+        .replace(/<\/?artifact[^>]*>/gi, '') // Any remaining partial tags
+        .trim()
+      return { artifacts: completedStreamingArtifacts, modifiedContent: cleanedContent }
+    }
     return parseMessageForArtifacts(message.content)
-  }, [message.content, isUser, isStreaming])
+  }, [message.content, isUser, isStreaming, completedStreamingArtifacts])
 
   // Helper to clean artifact tags from streaming content
   // This removes the visible <artifact> tags and their incomplete content during streaming
@@ -997,6 +1020,30 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
         >
           {displayContent || ' '}
         </ReactMarkdown>
+      )
+    }
+
+    // If we have completedStreamingArtifacts, render text then artifacts (no placeholders)
+    // This handles artifacts from streaming events where tags may have leaked partially
+    if (completedStreamingArtifacts && completedStreamingArtifacts.length > 0) {
+      return (
+        <>
+          {modifiedContent && modifiedContent.trim() && (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents}
+            >
+              {modifiedContent}
+            </ReactMarkdown>
+          )}
+          {artifacts.map(artifact => (
+            <InlineArtifact
+              key={artifact.id}
+              artifact={artifact}
+              onOpenInPanel={onOpenArtifactInPanel}
+            />
+          ))}
+        </>
       )
     }
 

@@ -265,12 +265,60 @@ function AuthenticatedApp() {
     setShowArtifacts(prev => !prev)
   }, [])
 
-  // Reset artifacts when session changes
+  // Track previous session ID to detect when we're switching sessions vs updating session ID
+  const prevSessionIdRef = React.useRef(currentSessionId)
+  // Track if we have artifacts in the current conversation (to prevent closing panel on session ID update)
+  const hasArtifactsInSessionRef = React.useRef(false)
+
+  // Update hasArtifactsInSession when artifacts change
   useEffect(() => {
-    setLocalArtifacts([])
-    setSelectedArtifact(null)
-    setStreamingArtifact(null)
-  }, [currentSessionId])
+    hasArtifactsInSessionRef.current = localArtifacts.length > 0 || streamingArtifact !== null || selectedArtifact !== null
+  }, [localArtifacts.length, streamingArtifact, selectedArtifact])
+
+  // Reset artifacts and close panel only when explicitly starting a new chat (session becomes null)
+  // or when switching to a completely different session (clicking a different chat in sidebar)
+  useEffect(() => {
+    const prevId = prevSessionIdRef.current
+    prevSessionIdRef.current = currentSessionId
+
+    // Only reset when:
+    // 1. Session becomes null (clicking "New chat")
+    // 2. Switching from null to a new session after clicking new chat (reset artifacts)
+    // Do NOT reset when session ID updates during streaming (temp ID to backend ID)
+
+    if (currentSessionId === null && prevId !== null) {
+      // Explicitly clearing session (New chat clicked)
+      console.log('[App] Session cleared - resetting artifacts and closing panel')
+      setLocalArtifacts([])
+      setSelectedArtifact(null)
+      setStreamingArtifact(null)
+      setShowArtifacts(false)
+      hasArtifactsInSessionRef.current = false
+    } else if (currentSessionId !== null && prevId === null) {
+      // Going from null to a new session (starting fresh after New chat)
+      // Reset artifacts to ensure clean state
+      console.log('[App] New session started from null - resetting artifacts')
+      setLocalArtifacts([])
+      setSelectedArtifact(null)
+      hasArtifactsInSessionRef.current = false
+      // Don't reset streamingArtifact - it might be set during the first message
+      // Don't close the panel - it should open when artifacts are detected
+    } else if (currentSessionId !== null && prevId !== null && currentSessionId !== prevId) {
+      // Switching between two different existing sessions
+      // If we have artifacts in this session (or just had them), don't close
+      // This handles the temp->backend session ID update case
+      if (!hasArtifactsInSessionRef.current && !showArtifacts) {
+        console.log('[App] Switching sessions from', prevId, 'to', currentSessionId, '- resetting artifacts')
+        setLocalArtifacts([])
+        setSelectedArtifact(null)
+        setStreamingArtifact(null)
+        setShowArtifacts(false)
+        hasArtifactsInSessionRef.current = false
+      } else {
+        console.log('[App] Session ID updated but has artifacts - keeping panel state')
+      }
+    }
+  }, [currentSessionId, showArtifacts])
 
   // Apply color mode to the document
   useEffect(() => {

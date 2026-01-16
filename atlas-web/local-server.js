@@ -238,6 +238,16 @@ const STREAM_URL = 'https://vminx32zctbv4pqdwqyjllacwi0bjidt.lambda-url.us-east-
 // All chat requests are proxied to AWS Lambda for consistency
 const USE_LOCAL_CHAT = false;
 
+/**
+ * Extract JWT token from cookie header
+ * Looks for 'atlas_session' cookie
+ */
+function extractTokenFromCookie(cookieHeader) {
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(/atlas_session=([^;]+)/);
+  return match ? match[1] : null;
+}
+
 // Store pending insights (in-memory for now) - declared early so all endpoints can access
 let pendingInsights = [];
 
@@ -382,11 +392,18 @@ app.post('/api/chat/message/stream', async (req, res) => {
     console.log(`[Chat] Streaming via Lambda Function URL: ${STREAM_URL}`);
     console.log(`[Chat] Message for Claude (${messageForClaude?.length || 0} chars)`);
     console.log(`[Chat] Cookie header present:`, !!req.headers.cookie);
+
+    // Extract JWT from cookie and send as Authorization header for Lambda Function URL
+    console.log(`[Chat] Cookie header value:`, req.headers.cookie);
+    const token = extractTokenFromCookie(req.headers.cookie);
+    console.log(`[Chat] JWT token present:`, !!token);
+    if (token) console.log(`[Chat] Token (first 50 chars):`, token.substring(0, 50) + '...');
+
     const awsResponse = await fetch(STREAM_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Cookie': req.headers.cookie || '',
+        'Authorization': token ? `Bearer ${token}` : '',
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       },
       body: JSON.stringify(requestBody)
@@ -536,11 +553,16 @@ app.post('/api/chat/message/with-files/stream', async (req, res) => {
   try {
     console.log(`[Chat+Files] Streaming via Lambda Function URL: ${STREAM_URL}`);
     console.log(`[Chat+Files] Cookie header present:`, !!req.headers.cookie);
+
+    // Extract JWT from cookie and send as Authorization header for Lambda Function URL
+    const token = extractTokenFromCookie(req.headers.cookie);
+    console.log(`[Chat+Files] JWT token present:`, !!token);
+
     const awsResponse = await fetch(STREAM_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Cookie': req.headers.cookie || '',
+        'Authorization': token ? `Bearer ${token}` : '',
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       },
       body: JSON.stringify({
@@ -592,11 +614,19 @@ app.post('/api/auth/login', async (req, res) => {
 
     const data = await response.json();
 
-    // Forward set-cookie headers from AWS, removing Secure flag for localhost
+    // Forward set-cookie headers from AWS, adjusting for localhost
     const setCookie = response.headers.get('set-cookie');
+    console.log('[Auth] AWS Set-Cookie header:', setCookie);
     if (setCookie) {
-      // Remove Secure flag so cookies work over HTTP on localhost
-      const localCookie = setCookie.replace(/;\s*Secure/gi, '');
+      // For localhost, we need to:
+      // 1. Remove Secure flag (not needed for HTTP)
+      // 2. Change SameSite=None to SameSite=Lax (None requires Secure)
+      // 3. Remove any Domain attribute that might conflict
+      let localCookie = setCookie
+        .replace(/;\s*Secure/gi, '')
+        .replace(/SameSite=None/gi, 'SameSite=Lax')
+        .replace(/;\s*Domain=[^;]*/gi, '');
+      console.log('[Auth] Modified cookie for localhost:', localCookie);
       res.setHeader('Set-Cookie', localCookie);
     }
 
