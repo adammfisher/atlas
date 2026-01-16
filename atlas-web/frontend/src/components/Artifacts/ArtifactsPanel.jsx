@@ -14,7 +14,8 @@ import {
 
 const ALLY_PINK = '#CD477E'
 const MIN_WIDTH = 380
-const MAX_WIDTH_PERCENT = 75 // Maximum 75% of screen width
+const MAX_WIDTH_PERCENT = 80 // Maximum 80% of screen width
+const DEFAULT_WIDTH_PERCENT = 50 // Initial width: 50% of screen
 
 function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], isVisible = false, onClose, selectedArtifact, onSelectArtifact, streamingArtifact, fontFamily, onFileSaved }) {
   const [isAnimating, setIsAnimating] = useState(false)
@@ -29,21 +30,31 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
   const [activeTab, setActiveTab] = useState('preview')
   // Copy state
   const [copied, setCopied] = useState(false)
-  // Panel width state (in pixels)
-  const [panelWidth, setPanelWidth] = useState(500)
+  // Panel width state (in pixels) - initialize to 50% of viewport
+  const [panelWidth, setPanelWidth] = useState(() => Math.max(MIN_WIDTH, window.innerWidth * (DEFAULT_WIDTH_PERCENT / 100)))
   // Dragging state
   const [isDragging, setIsDragging] = useState(false)
   // Save to project state
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  // Track completed artifact to keep viewer open during state transition
+  const [completedArtifact, setCompletedArtifact] = useState(null)
   const containerRef = useRef(null)
   const panelRef = useRef(null)
 
   // Combine prop artifacts (from frontend detection) with fetched artifacts (from backend)
-  const artifacts = [...propArtifacts, ...fetchedArtifacts]
+  // Deduplicate by artifact ID to prevent showing the same artifact twice
+  const allArtifacts = [...propArtifacts, ...fetchedArtifacts]
+  const seenIds = new Set()
+  const artifacts = allArtifacts.filter(artifact => {
+    const id = artifact.id || artifact.artifactId
+    if (!id || seenIds.has(id)) return false
+    seenIds.add(id)
+    return true
+  })
 
-  // Determine what to show - streaming artifact takes priority
-  const displayArtifact = streamingArtifact || selectedArtifact
+  // Determine what to show - streaming artifact takes priority, then selected, then completed (for transition)
+  const displayArtifact = streamingArtifact || selectedArtifact || completedArtifact
 
   useEffect(() => {
     if (isVisible) {
@@ -99,6 +110,14 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
       // IMPORTANT: Switch to preview view to show the rendered result
       setActiveTab('preview')
 
+      // CRITICAL: Save the completed artifact to keep the viewer open during state transition
+      // This ensures we show the rendered artifact, not the list
+      const finalArtifact = selectedArtifact || lastStreamingArtifactRef.current
+      if (finalArtifact) {
+        console.log('[ArtifactsPanel] Setting completedArtifact to keep viewer open:', finalArtifact.id)
+        setCompletedArtifact(finalArtifact)
+      }
+
       // When streaming ends, the selectedArtifact should have the complete content
       // Use it directly if it has content, otherwise keep what we have from streaming
       if (selectedArtifact && selectedArtifact.content) {
@@ -120,11 +139,14 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
       return
     }
 
-    console.log('[ArtifactsPanel] selectedArtifact change (non-streaming):', selectedArtifact?.id, 'content:', selectedArtifact?.content?.length)
+    console.log('[ArtifactsPanel] selectedArtifact change (non-streaming):', selectedArtifact?.id, 'content:', selectedArtifact?.content?.length, 'completedArtifact:', completedArtifact?.id)
 
     if (selectedArtifact) {
       loadArtifactContent(selectedArtifact)
-    } else {
+      // DON'T clear completedArtifact here - it's needed as a fallback if selectedArtifact gets cleared
+      // completedArtifact is only cleared explicitly in handleBackToList
+    } else if (!completedArtifact) {
+      // Only clear content if we don't have a completed artifact keeping us in viewer mode
       setArtifactContent(null)
     }
   }, [selectedArtifact])
@@ -253,6 +275,7 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
   const handleBackToList = () => {
     onSelectArtifact?.(null)
     setArtifactContent(null)
+    setCompletedArtifact(null) // Clear completed artifact when explicitly going back to list
   }
 
   const handleDownload = (artifact) => {
@@ -696,9 +719,9 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
         </div>
       )}
 
-      {/* Content - clean whitespace like Claude */}
+      {/* Content - full width preview with padding */}
       <div className="flex-1 overflow-auto">
-        <div className="px-6 py-6 max-w-none">
+        <div className="h-full w-full p-4">
           {renderContent()}
         </div>
       </div>

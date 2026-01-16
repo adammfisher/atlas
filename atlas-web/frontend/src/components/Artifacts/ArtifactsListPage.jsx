@@ -13,8 +13,8 @@ import {
 } from './renderers'
 
 const ALLY_PINK = '#CD477E'
-const MIN_PANEL_WIDTH_PERCENT = 30
-const MAX_PANEL_WIDTH_PERCENT = 70
+const MIN_PANEL_WIDTH = 400 // Minimum panel width in pixels
+const MAX_PANEL_WIDTH_PERCENT = 70 // Maximum 70% of screen
 
 function ArtifactsListPage() {
   const [artifacts, setArtifacts] = useState([])
@@ -26,7 +26,8 @@ function ArtifactsListPage() {
   const [isLoadingContent, setIsLoadingContent] = useState(false)
   const [activeTab, setActiveTab] = useState('preview')
   const [copied, setCopied] = useState(false)
-  const [panelWidthPercent, setPanelWidthPercent] = useState(50) // Start at 50% width
+  // Use pixel-based width for smooth dragging - initialize to 50% of window
+  const [panelWidth, setPanelWidth] = useState(() => Math.floor(window.innerWidth * 0.5))
   const [isDragging, setIsDragging] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const containerRef = React.useRef(null)
@@ -65,11 +66,12 @@ function ArtifactsListPage() {
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isDragging) return
-      // Calculate width as percentage of window
-      const newWidthPercent = ((window.innerWidth - e.clientX) / window.innerWidth) * 100
+      // Calculate width in pixels from right edge
+      const newWidth = window.innerWidth - e.clientX
+      const maxWidth = window.innerWidth * (MAX_PANEL_WIDTH_PERCENT / 100)
       // Clamp to min/max range
-      if (newWidthPercent >= MIN_PANEL_WIDTH_PERCENT && newWidthPercent <= MAX_PANEL_WIDTH_PERCENT) {
-        setPanelWidthPercent(newWidthPercent)
+      if (newWidth >= MIN_PANEL_WIDTH && newWidth <= maxWidth) {
+        setPanelWidth(newWidth)
       }
     }
 
@@ -311,9 +313,12 @@ function ArtifactsListPage() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden" style={{ backgroundColor: 'var(--bg-primary)' }}>
+    <div className="flex h-full w-full overflow-hidden" style={{ backgroundColor: 'var(--bg-primary)' }}>
       {/* Main content - artifacts table */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className="overflow-y-auto flex-shrink-0"
+        style={{ width: selectedArtifact ? `calc(100% - ${panelWidth}px)` : '100%' }}
+      >
         <div className="max-w-5xl mx-auto px-6 py-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -462,40 +467,32 @@ function ArtifactsListPage() {
       {/* Artifact viewer panel */}
       {selectedArtifact && (
         <div
-          className="border-l flex flex-col h-full relative"
+          className="border-l flex flex-col h-full relative flex-shrink-0"
           style={{
+            width: `${panelWidth}px`,
             backgroundColor: 'var(--bg-primary)',
-            borderColor: 'var(--border-color)',
-            width: `${panelWidthPercent}%`,
-            minWidth: `${MIN_PANEL_WIDTH_PERCENT}%`,
-            maxWidth: `${MAX_PANEL_WIDTH_PERCENT}%`
+            borderColor: 'var(--border-color)'
           }}
         >
-          {/* Resize Handle - wider hit area and always visible indicator */}
+          {/* Resize Handle - thin line that highlights on hover */}
           <div
-            className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize group flex items-center justify-center z-10 hover:w-3 transition-all"
+            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10 group"
             onMouseDown={(e) => { e.preventDefault(); setIsDragging(true) }}
-            style={{ backgroundColor: isDragging ? ALLY_PINK : 'rgba(205, 71, 126, 0.3)' }}
           >
-            {/* Grip indicator - always visible */}
+            {/* Visible line - subtle when not dragging */}
             <div
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-12 rounded flex items-center justify-center transition-opacity"
-              style={{
-                backgroundColor: isDragging ? ALLY_PINK : 'var(--bg-tertiary)',
-                opacity: isDragging ? 1 : 0.8
-              }}
-            >
-              <GripVertical size={14} style={{ color: isDragging ? 'white' : 'var(--text-muted)' }} />
-            </div>
+              className="absolute left-0 top-0 bottom-0 w-1"
+              style={{ backgroundColor: isDragging ? ALLY_PINK : 'transparent' }}
+            />
             {/* Hover highlight */}
             <div
-              className="absolute left-0 top-0 bottom-0 w-2 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover:opacity-100"
               style={{ backgroundColor: ALLY_PINK }}
             />
           </div>
 
-          {/* Viewer content */}
-          <div ref={containerRef} className="flex flex-col h-full" style={{ backgroundColor: isFullscreen ? 'var(--bg-secondary)' : 'transparent' }}>
+          {/* Viewer content - add left padding to avoid overlap with resize handle */}
+          <div ref={containerRef} className="flex flex-col h-full" style={{ paddingLeft: '12px', backgroundColor: isFullscreen ? 'var(--bg-secondary)' : 'transparent' }}>
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0" style={{ borderColor: 'var(--border-color)' }}>
               <div className="flex items-center gap-3 min-w-0">
@@ -584,9 +581,9 @@ function ArtifactsListPage() {
               </div>
             )}
 
-            {/* Content */}
+            {/* Content - full width */}
             <div className="flex-1 overflow-auto">
-              <div className="p-4 max-w-none">
+              <div className="h-full w-full">
                 {renderContent()}
               </div>
             </div>
