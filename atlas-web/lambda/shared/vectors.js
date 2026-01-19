@@ -365,6 +365,61 @@ async function projectIndexesExist(userId, projectId) {
 // These use SHARED indexes with user_id filtering for tenant isolation
 // ============================================================================
 
+// Track if global indexes have been checked/created this session
+let globalIndexesChecked = false;
+
+/**
+ * Ensure global indexes exist (lazily create if not)
+ * Called automatically when storing global data
+ */
+async function ensureGlobalIndexes() {
+  if (globalIndexesChecked) return;
+  if (!VECTOR_BUCKET) {
+    throw new Error('VECTORS_BUCKET environment variable not configured');
+  }
+
+  const baseConfig = {
+    vectorBucketName: VECTOR_BUCKET,
+    dimension: EMBEDDING_DIMENSION,
+    distanceMetric: 'cosine',
+    dataType: 'float32'
+  };
+
+  // Create memories index
+  try {
+    await client.send(new CreateIndexCommand({
+      ...baseConfig,
+      indexName: GLOBAL_MEMORIES_INDEX
+    }));
+    console.log(`[Vectors] Created global memories index: ${GLOBAL_MEMORIES_INDEX}`);
+  } catch (err) {
+    if (err.name === 'ConflictException' || err.message?.includes('already exists')) {
+      // Index already exists - good
+    } else {
+      console.error('[Vectors] Failed to create global memories index:', err.message);
+      throw err;
+    }
+  }
+
+  // Create conversations index
+  try {
+    await client.send(new CreateIndexCommand({
+      ...baseConfig,
+      indexName: GLOBAL_CONVERSATIONS_INDEX
+    }));
+    console.log(`[Vectors] Created global conversations index: ${GLOBAL_CONVERSATIONS_INDEX}`);
+  } catch (err) {
+    if (err.name === 'ConflictException' || err.message?.includes('already exists')) {
+      // Index already exists - good
+    } else {
+      console.error('[Vectors] Failed to create global conversations index:', err.message);
+      throw err;
+    }
+  }
+
+  globalIndexesChecked = true;
+}
+
 /**
  * Store a global memory fact with semantic deduplication
  * Uses shared GLOBAL_MEMORIES_INDEX with user_id filtering
@@ -381,6 +436,9 @@ async function storeGlobalMemoryFact(userId, fact) {
   if (!userId) {
     throw new Error('userId is required for global memory storage');
   }
+
+  // Ensure global indexes exist before storing
+  await ensureGlobalIndexes();
 
   const { content, category, confidence, sourceSessionId, sourceContext, reasoning } = fact;
   const now = Date.now();
@@ -494,11 +552,21 @@ async function storeGlobalConversationChunk(userId, chunk) {
     throw new Error('userId is required for global conversation storage');
   }
 
+  // Ensure global indexes exist before storing
+  await ensureGlobalIndexes();
+
   const { sessionId, chunkIndex, content, timestamp, messageCount, summary } = chunk;
   const now = timestamp || Date.now();
 
   const embedding = await getEmbedding(content);
   const key = `conv_${userId}_${sessionId}_${chunkIndex || now}`;
+
+  // S3 Vectors has a 2048 byte limit for TOTAL metadata size
+  // Reserve ~300 bytes for other fields, leaving ~1700 for content + summary
+  const maxContentLength = 1500;
+  const maxSummaryLength = 200;
+  const truncatedContent = content.slice(0, maxContentLength);
+  const truncatedSummary = (summary || '').slice(0, maxSummaryLength);
 
   await client.send(new PutVectorsCommand({
     vectorBucketName: VECTOR_BUCKET,
@@ -513,9 +581,9 @@ async function storeGlobalConversationChunk(userId, chunk) {
         chunk_index: (chunkIndex || 0).toString(),
         timestamp: now.toString(),
         message_count: (messageCount || 0).toString(),
-        // Non-filterable metadata
-        content: content.slice(0, 2000), // Store truncated content
-        summary: summary || ''
+        // Non-filterable metadata (truncated to fit 2048 byte limit)
+        content: truncatedContent,
+        summary: truncatedSummary
       }
     }]
   }));
@@ -543,9 +611,12 @@ async function searchGlobalMemories(userId, query, options = {}) {
     return [];
   }
 
+  // Ensure global indexes exist before searching
+  await ensureGlobalIndexes();
+
   // Note: S3 Vectors uses cosine distance (not similarity), so scores are lower
-  // than typical vector DBs. A minScore of 0.1 is reasonable for most queries.
-  const { topK = 15, minScore = 0.1, category = null } = options;
+  // than typical vector DBs. For personal memory, retrieve more and let LLM filter.
+  const { topK = 20, minScore = 0.01, category = null } = options;
 
   try {
     const queryEmbedding = await getEmbedding(query);
@@ -615,8 +686,11 @@ async function searchGlobalConversations(userId, query, options = {}) {
     return [];
   }
 
-  // Note: S3 Vectors uses cosine distance, lower threshold for conversation search
-  const { topK = 5, minScore = 0.1 } = options;
+  // Ensure global indexes exist before searching
+  await ensureGlobalIndexes();
+
+  // Note: S3 Vectors uses cosine distance. For conversation context, retrieve more.
+  const { topK = 10, minScore = 0.01 } = options;
 
   try {
     const queryEmbedding = await getEmbedding(query);
@@ -850,6 +924,7 @@ module.exports = {
   projectIndexesExist,
 
   // Global (shared index) functions
+  ensureGlobalIndexes,
   storeGlobalMemoryFact,
   storeGlobalConversationChunk,
   searchGlobalMemories,

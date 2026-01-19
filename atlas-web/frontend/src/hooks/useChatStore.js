@@ -114,12 +114,17 @@ export const useChatStore = create(
       })),
 
       // Actions - Messages
-      addMessage: (message) => set((state) => {
-        const sessionId = state.currentSessionId
-        if (!sessionId) return state
+      addMessage: (message, explicitSessionId = null) => set((state) => {
+        // Use explicit sessionId if provided, otherwise fall back to currentSessionId
+        const sessionId = explicitSessionId || state.currentSessionId
+        if (!sessionId) {
+          console.warn('[useChatStore] addMessage called without sessionId')
+          return state
+        }
         const currentMessages = state.messagesBySession[sessionId] || []
         // Use timestamp + random suffix to ensure unique IDs even for rapid additions
         const uniqueId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        console.log('[useChatStore] addMessage to session:', sessionId, 'message role:', message.role)
         return {
           messagesBySession: {
             ...state.messagesBySession,
@@ -132,8 +137,8 @@ export const useChatStore = create(
         }
       }),
 
-      updateLastMessage: (updater, keepStreaming = true) => set((state) => {
-        const sessionId = state.currentSessionId
+      updateLastMessage: (updater, keepStreaming = true, explicitSessionId = null) => set((state) => {
+        const sessionId = explicitSessionId || state.currentSessionId
         if (!sessionId) return state
         const messages = [...(state.messagesBySession[sessionId] || [])]
         if (messages.length > 0) {
@@ -152,8 +157,8 @@ export const useChatStore = create(
         }
       }),
 
-      setMessageStreaming: (isStreaming) => set((state) => {
-        const sessionId = state.currentSessionId
+      setMessageStreaming: (isStreaming, explicitSessionId = null) => set((state) => {
+        const sessionId = explicitSessionId || state.currentSessionId
         if (!sessionId) return state
         const messages = [...(state.messagesBySession[sessionId] || [])]
         if (messages.length > 0) {
@@ -342,13 +347,23 @@ export const useChatStore = create(
         colorMode: state.colorMode,
         chatFont: state.chatFont,
       }),
-      onRehydrateStorage: () => (state) => {
+      onRehydrateStorage: () => (state, error) => {
         console.log('Hydrated state:', {
           sessionsCount: state?.sessions?.length,
-          currentSessionId: state?.currentSessionId
+          currentSessionId: state?.currentSessionId,
+          error: error
         })
-        state?.setHasHydrated(true)
       },
     }
   )
 )
+
+// Set hydration flag after store is created
+// This runs synchronously after the persist middleware rehydrates
+if (typeof window !== 'undefined') {
+  // Use a microtask to ensure the store is fully initialized
+  Promise.resolve().then(() => {
+    useChatStore.getState().setHasHydrated(true)
+    console.log('[useChatStore] Hydration complete')
+  })
+}

@@ -67,15 +67,23 @@ function Sidebar() {
     updateSessionTitle,
     toggleSessionStar,
     deleteSession,
-    user
+    user,
+    _hasHydrated,
+    setSessions
   } = useChatStore()
 
   const { logout } = useAuth()
 
   const [isLoadingSessions, setIsLoadingSessions] = useState(true)
 
-  // Fetch sessions from backend on mount - always fetch immediately
+  // Fetch sessions from backend after hydration - only runs once when hydration completes
   useEffect(() => {
+    // Wait for Zustand to hydrate from localStorage first
+    if (!_hasHydrated) {
+      console.log('[Sidebar] Waiting for hydration...')
+      return
+    }
+
     let isMounted = true
 
     const fetchSessions = async () => {
@@ -98,21 +106,28 @@ function Sidebar() {
           }))
 
           // Merge with local sessions - keep local sessions that aren't in backend
+          // Also keep temp sessions (session_ prefix) that are still being created
           const localSessions = useChatStore.getState().sessions || []
           const backendIds = new Set(normalizedBackendSessions.map(s => s.id))
-          const localOnlySessions = localSessions.filter(s => !backendIds.has(s.id))
+          // Keep sessions that: (1) aren't in backend AND (2) are either temp sessions OR have messages
+          const localOnlySessions = localSessions.filter(s => {
+            if (backendIds.has(s.id)) return false
+            // Keep temp sessions (being created right now)
+            if (s.id.startsWith('session_')) return true
+            // Keep any other local session not in backend
+            return true
+          })
 
           // Combine: local-only sessions + backend sessions, sorted by date
           const mergedSessions = [...localOnlySessions, ...normalizedBackendSessions]
             .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
 
           console.log('[Sidebar] Merged', localOnlySessions.length, 'local +', normalizedBackendSessions.length, 'backend =', mergedSessions.length, 'sessions')
-          useChatStore.getState().setSessions(mergedSessions)
-          setIsLoadingSessions(false)
+          setSessions(mergedSessions)
         } else {
-          console.log('[Sidebar] No backend sessions, keeping local sessions')
-          setIsLoadingSessions(false)
+          console.log('[Sidebar] No backend sessions, keeping local sessions (count:', useChatStore.getState().sessions?.length, ')')
         }
+        setIsLoadingSessions(false)
       } catch (e) {
         console.error('[Sidebar] Failed to fetch sessions from backend:', e)
         if (isMounted) setIsLoadingSessions(false)
@@ -122,7 +137,7 @@ function Sidebar() {
     fetchSessions()
 
     return () => { isMounted = false }
-  }, [])
+  }, [_hasHydrated, setSessions])
 
   // Close menu on outside click
   useEffect(() => {

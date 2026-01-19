@@ -1387,11 +1387,13 @@ async function getGlobalContext(userId, query, recentMessages = []) {
     console.log(`[GlobalContext] Semantic query: "${semanticQuery.substring(0, 100)}..."`);
 
     // Search global memories (filtered by userId internally)
-    // Note: Using lower minScore (0.1) because S3 Vectors uses cosine distance
-    // which results in lower similarity scores than other vector DBs
+    // Note: Using very low minScore (0.01) because S3 Vectors uses cosine distance
+    // which results in lower similarity scores than other vector DBs.
+    // For personal memory, it's better to retrieve more and let the LLM filter
+    // than to miss relevant memories due to semantic mismatch.
     globalMemories = await vectors.searchGlobalMemories(userId, semanticQuery, {
-      topK: 15,
-      minScore: 0.1
+      topK: 20,
+      minScore: 0.01
     });
 
     // Search global conversations

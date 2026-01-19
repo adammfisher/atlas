@@ -35,6 +35,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
   const [completedStreamingArtifacts, setCompletedStreamingArtifacts] = useState([])
   // AbortController for stopping streaming
   const abortControllerRef = useRef(null)
+  // Track active session ID for streaming callbacks (ref to avoid closure issues)
+  const activeSessionRef = useRef(null)
 
   const {
     messagesBySession,
@@ -192,16 +194,24 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
 
     // Use existing session ID if available, otherwise create a temporary local one
     // This ensures messages are stored while we wait for the backend session ID
-    let activeSessionId = currentSessionId
+    // IMPORTANT: Check the URL sessionId first, then fall back to currentSessionId in store
+    // This fixes the issue where second message creates a new session
+    let activeSessionId = sessionId || currentSessionId
     let isNewSession = !activeSessionId
     let tempSessionId = null
+
+    console.log('[ChatView] handleSend - sessionId from URL:', sessionId, 'currentSessionId from store:', currentSessionId, 'isNewSession:', isNewSession)
 
     if (isNewSession) {
       // Create a temporary session so messages have somewhere to go
       // Pass projectId if we're in a project context
       tempSessionId = createSession(null, projectId || null)
       activeSessionId = tempSessionId
+      console.log('[ChatView] Created temp session:', tempSessionId)
     }
+
+    // Store active session ID in ref so callbacks can access it
+    activeSessionRef.current = activeSessionId
 
     // Add user message to store - include preview URLs for images
     const filesWithPreviews = files.map(f => {
@@ -212,11 +222,12 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
       return fileInfo
     })
 
+    // Explicitly pass the session ID to ensure messages go to the right session
     addMessage({
       role: 'user',
       content: message,
       files: filesWithPreviews
-    })
+    }, activeSessionId)
 
     // Add placeholder for assistant response
     addMessage({
@@ -224,7 +235,7 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
       content: '',
       isStreaming: true,
       thinkingSteps: [] // Initialize empty thinking steps for this message
-    })
+    }, activeSessionId)
 
     setIsStreaming(true)
     fullResponseRef.current = ''
@@ -554,7 +565,7 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
 
             // Only update display if we have non-artifact content
             if (displayText && displayText.trim()) {
-              updateLastMessage(prev => prev + displayText)
+              updateLastMessage(prev => prev + displayText, true, activeSessionRef.current)
             }
 
             // Update streaming artifact content if backend initiated one
@@ -564,12 +575,12 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
           },
           (result) => {
             setIsStreaming(false)
-            setMessageStreaming(false)
+            setMessageStreaming(false, activeSessionRef.current)
 
             // Flush any remaining buffer content
             const state = window._artifactStreamState
             if (state && state.buffer && !state.insideArtifact) {
-              updateLastMessage(prev => prev + state.buffer)
+              updateLastMessage(prev => prev + state.buffer, true, activeSessionRef.current)
               state.buffer = ''
             }
 
@@ -581,18 +592,46 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
             // If this was a new session, migrate temp session to backend session ID
             if (isNewSession && result.session_id && tempSessionId) {
               const backendSessionId = result.session_id
+              console.log('[ChatView] Migrating session from', tempSessionId, 'to', backendSessionId)
               const store = useChatStore.getState()
               // Get messages from temp session
               const tempMessages = store.messagesBySession[tempSessionId] || []
-              // Update the temp session's ID to the backend ID
-              const updatedSessions = store.sessions.map(s =>
-                s.id === tempSessionId ? { ...s, id: backendSessionId } : s
-              )
+
+              // Check if temp session still exists in store (might have been removed by Sidebar refresh)
+              const tempSessionExists = store.sessions.some(s => s.id === tempSessionId)
+              const backendSessionExists = store.sessions.some(s => s.id === backendSessionId)
+
+              let updatedSessions
+              if (tempSessionExists) {
+                // Update the temp session's ID to the backend ID
+                updatedSessions = store.sessions.map(s =>
+                  s.id === tempSessionId ? { ...s, id: backendSessionId } : s
+                )
+              } else if (!backendSessionExists) {
+                // Temp session was removed (e.g., by Sidebar refresh) - add the backend session
+                const newSession = {
+                  id: backendSessionId,
+                  title: null,
+                  starred: false,
+                  projectId: projectId || null,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                }
+                updatedSessions = [newSession, ...store.sessions]
+                console.log('[ChatView] Temp session was removed, adding backend session:', backendSessionId)
+              } else {
+                // Backend session already exists (shouldn't happen, but handle gracefully)
+                updatedSessions = store.sessions
+                console.log('[ChatView] Backend session already exists:', backendSessionId)
+              }
+
               // Move messages to the new session ID and remove temp session
               const { [tempSessionId]: _, ...restMessages } = store.messagesBySession
               store.setSessions(updatedSessions)
               store.setSessionMessages(backendSessionId, tempMessages)
               store.setCurrentSession(backendSessionId)
+              // Update the ref so subsequent operations use the correct session ID
+              activeSessionRef.current = backendSessionId
               // Navigate to the new URL
               navigate(projectId ? `/project/${projectId}/chat/${backendSessionId}` : `/chat/${backendSessionId}`, { replace: true })
               // Update activeSessionId for title generation
@@ -695,7 +734,7 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
                   return displayText
                 }
                 return prev + displayText
-              })
+              }, true, activeSessionRef.current)
             }
 
             // Update streaming artifact content if backend initiated one
@@ -705,12 +744,12 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
           },
           (result) => {
             setIsStreaming(false)
-            setMessageStreaming(false)
+            setMessageStreaming(false, activeSessionRef.current)
 
             // Flush any remaining buffer content
             const state = window._artifactStreamState
             if (state && state.buffer && !state.insideArtifact) {
-              updateLastMessage(prev => prev + state.buffer)
+              updateLastMessage(prev => prev + state.buffer, true, activeSessionRef.current)
               state.buffer = ''
             }
 
@@ -722,18 +761,46 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
             // If this was a new session, migrate temp session to backend session ID
             if (isNewSession && result.session_id && tempSessionId) {
               const backendSessionId = result.session_id
+              console.log('[ChatView] Migrating session from', tempSessionId, 'to', backendSessionId)
               const store = useChatStore.getState()
               // Get messages from temp session
               const tempMessages = store.messagesBySession[tempSessionId] || []
-              // Update the temp session's ID to the backend ID
-              const updatedSessions = store.sessions.map(s =>
-                s.id === tempSessionId ? { ...s, id: backendSessionId } : s
-              )
+
+              // Check if temp session still exists in store (might have been removed by Sidebar refresh)
+              const tempSessionExists = store.sessions.some(s => s.id === tempSessionId)
+              const backendSessionExists = store.sessions.some(s => s.id === backendSessionId)
+
+              let updatedSessions
+              if (tempSessionExists) {
+                // Update the temp session's ID to the backend ID
+                updatedSessions = store.sessions.map(s =>
+                  s.id === tempSessionId ? { ...s, id: backendSessionId } : s
+                )
+              } else if (!backendSessionExists) {
+                // Temp session was removed (e.g., by Sidebar refresh) - add the backend session
+                const newSession = {
+                  id: backendSessionId,
+                  title: null,
+                  starred: false,
+                  projectId: projectId || null,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                }
+                updatedSessions = [newSession, ...store.sessions]
+                console.log('[ChatView] Temp session was removed, adding backend session:', backendSessionId)
+              } else {
+                // Backend session already exists (shouldn't happen, but handle gracefully)
+                updatedSessions = store.sessions
+                console.log('[ChatView] Backend session already exists:', backendSessionId)
+              }
+
               // Move messages to the new session ID and remove temp session
               const { [tempSessionId]: _, ...restMessages } = store.messagesBySession
               store.setSessions(updatedSessions)
               store.setSessionMessages(backendSessionId, tempMessages)
               store.setCurrentSession(backendSessionId)
+              // Update the ref so subsequent operations use the correct session ID
+              activeSessionRef.current = backendSessionId
               // Navigate to the new URL
               navigate(projectId ? `/project/${projectId}/chat/${backendSessionId}` : `/chat/${backendSessionId}`, { replace: true })
               // Update activeSessionId for title generation

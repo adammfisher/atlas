@@ -34,3 +34,9 @@ variable "cors_origin" {
   type        = string
   default     = "https://d2e9zue1tj9oj5.cloudfront.net"
 }
+
+variable "allow_dev_auth" {
+  description = "Allow X-User-Id header authentication for local development (set to 'true' to enable)"
+  type        = string
+  default     = "true"
+}

@@ -46,7 +46,19 @@ function extractToken(event) {
 function authenticateRequest(event) {
   const token = extractToken(event);
 
+  // Development mode: Allow X-User-Id header bypass when no JWT is present
+  // This enables local development without requiring authentication
   if (!token) {
+    const devUserId = event.headers?.['x-user-id'] || event.headers?.['X-User-Id'];
+    if (devUserId && process.env.ALLOW_DEV_AUTH === 'true') {
+      console.log('[Auth] Development mode: using X-User-Id header:', devUserId);
+      return {
+        userId: devUserId,
+        username: devUserId,
+        role: 'user'
+      };
+    }
+
     const error = new Error('Authentication required');
     error.statusCode = 401;
     throw error;

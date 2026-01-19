@@ -35,6 +35,7 @@ resource "aws_lambda_function" "chat" {
       NEO4J_URL             = var.neo4j_url
       OPENSEARCH_URL        = var.opensearch_url
       JWT_SECRET            = data.aws_ssm_parameter.jwt_secret.value
+      ALLOW_DEV_AUTH        = var.allow_dev_auth
     }
   }
 }
@@ -67,6 +68,7 @@ resource "aws_lambda_function" "chat_stream" {
       NEO4J_URL             = var.neo4j_url
       OPENSEARCH_URL        = var.opensearch_url
       JWT_SECRET            = data.aws_ssm_parameter.jwt_secret.value
+      ALLOW_DEV_AUTH        = var.allow_dev_auth
     }
   }
 }
@@ -107,6 +109,7 @@ resource "aws_lambda_function" "sessions" {
       ARTIFACTS_TABLE  = aws_dynamodb_table.artifacts.name
       ARTIFACTS_BUCKET = aws_s3_bucket.artifacts.id
       JWT_SECRET       = data.aws_ssm_parameter.jwt_secret.value
+      ALLOW_DEV_AUTH   = var.allow_dev_auth
     }
   }
 }
@@ -134,6 +137,7 @@ resource "aws_lambda_function" "projects" {
       UPLOADS_BUCKET        = aws_s3_bucket.uploads.id
       VECTORS_BUCKET        = local.vectors_bucket_name
       JWT_SECRET            = data.aws_ssm_parameter.jwt_secret.value
+      ALLOW_DEV_AUTH        = var.allow_dev_auth
     }
   }
 }
@@ -156,6 +160,7 @@ resource "aws_lambda_function" "files" {
       UPLOADS_BUCKET   = aws_s3_bucket.uploads.id
       ARTIFACTS_BUCKET = aws_s3_bucket.artifacts.id
       JWT_SECRET       = data.aws_ssm_parameter.jwt_secret.value
+      ALLOW_DEV_AUTH   = var.allow_dev_auth
     }
   }
 }
@@ -177,6 +182,7 @@ resource "aws_lambda_function" "mcp_config" {
     variables = {
       MCP_CONFIGS_TABLE = aws_dynamodb_table.mcp_configs.name
       JWT_SECRET        = data.aws_ssm_parameter.jwt_secret.value
+      ALLOW_DEV_AUTH    = var.allow_dev_auth
     }
   }
 }
@@ -199,6 +205,7 @@ resource "aws_lambda_function" "artifacts" {
       ARTIFACTS_TABLE  = aws_dynamodb_table.artifacts.name
       ARTIFACTS_BUCKET = aws_s3_bucket.artifacts.id
       JWT_SECRET       = data.aws_ssm_parameter.jwt_secret.value
+      ALLOW_DEV_AUTH   = var.allow_dev_auth
     }
   }
 }
