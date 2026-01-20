@@ -585,7 +585,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
             }
 
             // Only update display if we have non-artifact content
-            if (displayText && displayText.trim()) {
+            // Note: Don't use .trim() check - spaces are valid content that must be preserved
+            if (displayText) {
               updateLastMessage(prev => prev + displayText, true, activeSessionRef.current)
             }
 
