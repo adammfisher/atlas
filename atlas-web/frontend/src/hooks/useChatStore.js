@@ -334,6 +334,12 @@ export const useChatStore = create(
         }
         return { projectMemoryContext: {} }
       }),
+
+      // Session refresh trigger - increment to signal Sidebar to refresh
+      sessionRefreshTrigger: 0,
+      triggerSessionRefresh: () => set((state) => ({
+        sessionRefreshTrigger: state.sessionRefreshTrigger + 1
+      })),
     }),
     {
       name: 'ally-chat-store',

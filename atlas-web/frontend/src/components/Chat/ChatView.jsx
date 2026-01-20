@@ -54,6 +54,7 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
     chatFont,
     _hasHydrated,
     setProjectMemoryContext,
+    triggerSessionRefresh,
   } = useChatStore()
 
   // Derive messages from messagesBySession for current session
@@ -663,6 +664,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
               streamingArtifactRef.current = null
               artifactContentRef.current = ''
             }
+            // Trigger sidebar refresh to show updated session list
+            triggerSessionRefresh()
           },
           handleThinking,
           handleSearchStart,
@@ -732,17 +735,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
             }
 
             // Only update display if we have non-artifact content
-            if (displayText && displayText.trim()) {
-              updateLastMessage(prev => {
-                // Skip if this exact text already exists (deduplication)
-                if (prev.includes(displayText)) return prev
-                // Check if this is cumulative content (new text extends existing)
-                // This handles cases where backend sends full content on each chunk
-                if (displayText.startsWith(prev.trim())) {
-                  return displayText
-                }
-                return prev + displayText
-              }, true, activeSessionRef.current)
+            if (displayText) {
+              updateLastMessage(prev => prev + displayText, true, activeSessionRef.current)
             }
 
             // Update streaming artifact content if backend initiated one
@@ -832,6 +826,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
               streamingArtifactRef.current = null
               artifactContentRef.current = ''
             }
+            // Trigger sidebar refresh to show updated session list
+            triggerSessionRefresh()
           },
           handleThinking,
           handleSearchStart,

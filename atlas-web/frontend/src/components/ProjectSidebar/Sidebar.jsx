@@ -69,7 +69,8 @@ function Sidebar() {
     deleteSession,
     user,
     _hasHydrated,
-    setSessions
+    setSessions,
+    sessionRefreshTrigger
   } = useChatStore()
 
   const { logout } = useAuth()
@@ -106,14 +107,18 @@ function Sidebar() {
           }))
 
           // Merge with local sessions - keep local sessions that aren't in backend
-          // Also keep temp sessions (session_ prefix) that are still being created
+          // BUT: Don't keep temp sessions that have already been migrated
           const localSessions = useChatStore.getState().sessions || []
+          const currentSessionId = useChatStore.getState().currentSessionId
           const backendIds = new Set(normalizedBackendSessions.map(s => s.id))
-          // Keep sessions that: (1) aren't in backend AND (2) are either temp sessions OR have messages
+          // Keep sessions that: (1) aren't in backend AND (2) are the CURRENT temp session (still being used)
           const localOnlySessions = localSessions.filter(s => {
             if (backendIds.has(s.id)) return false
-            // Keep temp sessions (being created right now)
-            if (s.id.startsWith('session_')) return true
+            // Only keep temp sessions if they are the CURRENT active session
+            // This prevents duplicate entries when a session was just migrated
+            if (s.id.startsWith('session_')) {
+              return s.id === currentSessionId
+            }
             // Keep any other local session not in backend
             return true
           })
@@ -137,7 +142,7 @@ function Sidebar() {
     fetchSessions()
 
     return () => { isMounted = false }
-  }, [_hasHydrated, setSessions])
+  }, [_hasHydrated, setSessions, sessionRefreshTrigger])
 
   // Close menu on outside click
   useEffect(() => {

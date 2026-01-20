@@ -267,13 +267,19 @@ function AuthenticatedApp() {
 
   // Track previous session ID to detect when we're switching sessions vs updating session ID
   const prevSessionIdRef = React.useRef(currentSessionId)
-  // Track if we have artifacts in the current conversation (to prevent closing panel on session ID update)
-  const hasArtifactsInSessionRef = React.useRef(false)
+  // Track the session ID that current artifacts belong to
+  const artifactsSessionIdRef = React.useRef(null)
 
-  // Update hasArtifactsInSession when artifacts change
+  // Update artifactsSessionId when we add artifacts to track which session owns them
   useEffect(() => {
-    hasArtifactsInSessionRef.current = localArtifacts.length > 0 || streamingArtifact !== null || selectedArtifact !== null
-  }, [localArtifacts.length, streamingArtifact, selectedArtifact])
+    if ((localArtifacts.length > 0 || streamingArtifact !== null) && currentSessionId) {
+      // Only update if we don't already have a session ID tracked, or if we're actively streaming
+      // This associates artifacts with their originating session
+      if (artifactsSessionIdRef.current === null || streamingArtifact !== null) {
+        artifactsSessionIdRef.current = currentSessionId
+      }
+    }
+  }, [localArtifacts.length, streamingArtifact, currentSessionId])
 
   // Reset artifacts and close panel only when explicitly starting a new chat (session becomes null)
   // or when switching to a completely different session (clicking a different chat in sidebar)
@@ -293,32 +299,55 @@ function AuthenticatedApp() {
       setSelectedArtifact(null)
       setStreamingArtifact(null)
       setShowArtifacts(false)
-      hasArtifactsInSessionRef.current = false
+      artifactsSessionIdRef.current = null
     } else if (currentSessionId !== null && prevId === null) {
       // Going from null to a new session (starting fresh after New chat)
       // Reset artifacts to ensure clean state
       console.log('[App] New session started from null - resetting artifacts')
       setLocalArtifacts([])
       setSelectedArtifact(null)
-      hasArtifactsInSessionRef.current = false
+      artifactsSessionIdRef.current = null
       // Don't reset streamingArtifact - it might be set during the first message
       // Don't close the panel - it should open when artifacts are detected
     } else if (currentSessionId !== null && prevId !== null && currentSessionId !== prevId) {
       // Switching between two different existing sessions
-      // If we have artifacts in this session (or just had them), don't close
-      // This handles the temp->backend session ID update case
-      if (!hasArtifactsInSessionRef.current && !showArtifacts) {
-        console.log('[App] Switching sessions from', prevId, 'to', currentSessionId, '- resetting artifacts')
-        setLocalArtifacts([])
-        setSelectedArtifact(null)
-        setStreamingArtifact(null)
-        setShowArtifacts(false)
-        hasArtifactsInSessionRef.current = false
-      } else {
-        console.log('[App] Session ID updated but has artifacts - keeping panel state')
+      // If streaming is active, this is a session ID migration during streaming - keep artifacts
+      if (streamingArtifact !== null) {
+        console.log('[App] Session ID changed during active streaming - keeping artifacts')
+        // Update the artifacts session ID to the new ID since they belong to the same conversation
+        artifactsSessionIdRef.current = currentSessionId
+        return
       }
+
+      // Check if this is a session ID migration (same conversation, different ID)
+      // Migration happens when:
+      // 1. Both session IDs start with 'session_' (temp format)
+      // 2. The timestamps in the IDs are very close (within 1 second = 1000ms)
+      // This distinguishes migration (e.g., session_1234567890 -> session_1234567891)
+      // from genuine session switches (e.g., session_1234567890 -> session_9876543210)
+      const prevTimestamp = parseInt(prevId.replace('session_', ''), 10)
+      const currentTimestamp = parseInt(currentSessionId.replace('session_', ''), 10)
+      const isMigration = prevId.startsWith('session_') &&
+                          currentSessionId.startsWith('session_') &&
+                          !isNaN(prevTimestamp) &&
+                          !isNaN(currentTimestamp) &&
+                          Math.abs(currentTimestamp - prevTimestamp) < 1000
+
+      if (isMigration) {
+        console.log('[App] Session ID migrated from', prevId, 'to', currentSessionId, '(delta:', currentTimestamp - prevTimestamp, 'ms) - keeping artifacts')
+        artifactsSessionIdRef.current = currentSessionId
+        return
+      }
+
+      // This is a genuine switch to a different chat - clear artifacts
+      console.log('[App] Switching sessions from', prevId, 'to', currentSessionId, '- resetting artifacts')
+      setLocalArtifacts([])
+      setSelectedArtifact(null)
+      setStreamingArtifact(null)
+      setShowArtifacts(false)
+      artifactsSessionIdRef.current = null
     }
-  }, [currentSessionId, showArtifacts])
+  }, [currentSessionId, streamingArtifact])
 
   // Apply color mode to the document
   useEffect(() => {

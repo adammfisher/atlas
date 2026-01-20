@@ -305,18 +305,30 @@ For HTML:
 
 Be concise but thorough. Use clear formatting when helpful.`;
 
-  // Add existing artifacts context so Claude knows what artifacts exist and can update them
+  // Add existing artifacts context so Claude knows what artifacts exist and can update/reference them
   if (existingArtifacts && existingArtifacts.length > 0) {
-    base += `\n\n<existing_artifacts>
-⚠️ CRITICAL: These artifacts ALREADY EXIST. When updating ANY of these, you MUST copy the title EXACTLY (character-for-character) or a duplicate will be created.
+    // Build artifact content section - include full content for Claude to reference
+    const artifactContents = existingArtifacts
+      .filter(a => a.content)
+      .map(a => `<artifact_content title="${a.title}" type="${a.type}">
+${a.content}
+</artifact_content>`)
+      .join('\n\n');
 
-${existingArtifacts.map(a => `EXISTING: "${a.title}" (type: ${a.type})`).join('\n')}
+    base += `\n\n<existing_artifacts>
+The following artifacts exist in this conversation. You can reference, summarize, or discuss their contents. When updating ANY of these, you MUST use the EXACT same title (character-for-character) or a duplicate will be created.
+
+ARTIFACT LIST:
+${existingArtifacts.map(a => `- "${a.title}" (type: ${a.type})`).join('\n')}
+
+${artifactContents ? `ARTIFACT CONTENTS:\n${artifactContents}` : ''}
 
 RULES FOR UPDATES:
 - If user says "update", "modify", "expand", "add to", "change", or similar → Use EXACT title from above
 - Do NOT paraphrase or improve the title
 - Do NOT add prefixes like "Updated:" or "V2:"
 - Copy the title string EXACTLY as shown above
+- You CAN reference and discuss the artifact contents above when the user asks about them
 
 Example: User says "add more items to the diagram"
 ✓ CORRECT: <artifact type="mermaid" title="${existingArtifacts[0]?.title || 'AWS Multi-Tier Web Application Architecture'}">

@@ -167,7 +167,13 @@ export const chatService = {
         web_search_enabled: webSearchEnabled,
         extended_thinking_enabled: false,
         enabled_connectors: enabledConnectors,
-        existing_artifacts: existingArtifacts.map(a => ({ id: a.id, title: a.title || a.name, type: a.type }))
+        existing_artifacts: existingArtifacts.map(a => ({
+          id: a.id,
+          title: a.title || a.name,
+          type: a.type,
+          // Include content (truncated to 10000 chars to prevent huge payloads)
+          content: a.content ? a.content.substring(0, 10000) : null
+        }))
       }),
       signal
     }))
@@ -204,7 +210,13 @@ export const chatService = {
         web_search_enabled: webSearchEnabled,
         extended_thinking_enabled: false,
         enabled_connectors: enabledConnectors,
-        existing_artifacts: existingArtifacts.map(a => ({ id: a.id, title: a.title || a.name, type: a.type })),
+        existing_artifacts: existingArtifacts.map(a => ({
+          id: a.id,
+          title: a.title || a.name,
+          type: a.type,
+          // Include content (truncated to 10000 chars to prevent huge payloads)
+          content: a.content ? a.content.substring(0, 10000) : null
+        })),
         files: filesData
       }),
       signal
