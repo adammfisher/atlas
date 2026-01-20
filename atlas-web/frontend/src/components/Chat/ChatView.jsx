@@ -561,13 +561,25 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
                   displayText += state.buffer.substring(0, openIndex)
                   state.insideArtifact = true
                   state.buffer = state.buffer.substring(openIndex)
-                } else if (state.buffer.length > 50 || !state.buffer.includes('<a')) {
-                  // Flush buffer if it's long enough or doesn't contain start of <artifact tag
-                  // Changed from checking for any '<' to specifically '<a' to avoid false holds
-                  displayText += state.buffer
-                  state.buffer = ''
                 } else {
-                  break
+                  // Check if buffer ends with a partial "<artifact" pattern
+                  // Only hold if the buffer ends with something that could be the start of <artifact
+                  const potentialTagStarts = ['<', '<a', '<ar', '<art', '<arti', '<artif', '<artifa', '<artifac', '<artifact']
+                  let hasPartialTag = false
+                  for (const partial of potentialTagStarts) {
+                    if (state.buffer.endsWith(partial)) {
+                      hasPartialTag = true
+                      // Flush everything except the potential partial tag
+                      displayText += state.buffer.substring(0, state.buffer.length - partial.length)
+                      state.buffer = partial
+                      break
+                    }
+                  }
+                  if (!hasPartialTag) {
+                    // No partial tag at end, flush entire buffer
+                    displayText += state.buffer
+                    state.buffer = ''
+                  }
                 }
               }
             }
@@ -722,14 +734,25 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
                   displayText += state.buffer.substring(0, openIndex)
                   state.insideArtifact = true
                   state.buffer = state.buffer.substring(openIndex)
-                } else if (state.buffer.length > 50 || !state.buffer.includes('<a')) {
-                  // Flush buffer if it's long enough or doesn't contain start of <artifact tag
-                  // Changed from checking for any '<' to specifically '<a' to avoid false holds
-                  displayText += state.buffer
-                  state.buffer = ''
                 } else {
-                  // Could be partial tag, hold buffer
-                  break
+                  // Check if buffer ends with a partial "<artifact" pattern
+                  // Only hold if the buffer ends with something that could be the start of <artifact
+                  const potentialTagStarts = ['<', '<a', '<ar', '<art', '<arti', '<artif', '<artifa', '<artifac', '<artifact']
+                  let hasPartialTag = false
+                  for (const partial of potentialTagStarts) {
+                    if (state.buffer.endsWith(partial)) {
+                      hasPartialTag = true
+                      // Flush everything except the potential partial tag
+                      displayText += state.buffer.substring(0, state.buffer.length - partial.length)
+                      state.buffer = partial
+                      break
+                    }
+                  }
+                  if (!hasPartialTag) {
+                    // No partial tag at end, flush entire buffer
+                    displayText += state.buffer
+                    state.buffer = ''
+                  }
                 }
               }
             }
@@ -1050,6 +1073,21 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
     return cleaned.trim()
   }
 
+  // Helper to fix malformed markdown bold/italic syntax
+  // Fixes patterns like "** text**" or "__ text__" (space after opening marker)
+  const fixMalformedMarkdown = (content) => {
+    if (!content) return content
+    // Fix bold: ** text** → **text**
+    let fixed = content.replace(/\*\*\s+([^*]+)\*\*/g, '**$1**')
+    // Fix italic with asterisks: * text* → *text*
+    fixed = fixed.replace(/\*\s+([^*]+)\*/g, '*$1*')
+    // Fix bold with underscores: __ text__ → __text__
+    fixed = fixed.replace(/__\s+([^_]+)__/g, '__$1__')
+    // Fix italic with underscores: _ text_ → _text_
+    fixed = fixed.replace(/_\s+([^_]+)_/g, '_$1_')
+    return fixed
+  }
+
   // Render content with artifact placeholders replaced by InlineArtifact components
   const renderContentWithArtifacts = () => {
     // Shared markdown components for consistent styling
@@ -1083,7 +1121,9 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
 
     if (artifacts.length === 0) {
       // During streaming, clean out artifact tags from visible content
-      const displayContent = isStreaming ? cleanStreamingContent(message.content) : message.content
+      let displayContent = isStreaming ? cleanStreamingContent(message.content) : message.content
+      // Fix malformed markdown syntax (e.g., "** text**" → "**text**")
+      displayContent = fixMalformedMarkdown(displayContent)
       return (
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -1097,14 +1137,15 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
     // If we have completedStreamingArtifacts, render text then artifacts (no placeholders)
     // This handles artifacts from streaming events where tags may have leaked partially
     if (completedStreamingArtifacts && completedStreamingArtifacts.length > 0) {
+      const fixedModifiedContent = fixMalformedMarkdown(modifiedContent)
       return (
         <>
-          {modifiedContent && modifiedContent.trim() && (
+          {fixedModifiedContent && fixedModifiedContent.trim() && (
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={markdownComponents}
             >
-              {modifiedContent}
+              {fixedModifiedContent}
             </ReactMarkdown>
           )}
           {artifacts.map(artifact => (
@@ -1139,13 +1180,14 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
       // Regular text - render with markdown
       // Use message.id + index for unique key during streaming
       if (part.trim()) {
+        const fixedPart = fixMalformedMarkdown(part)
         return (
           <ReactMarkdown
             key={`${message.id}-part-${index}`}
             remarkPlugins={[remarkGfm]}
             components={markdownComponents}
           >
-            {part}
+            {fixedPart}
           </ReactMarkdown>
         )
       }
