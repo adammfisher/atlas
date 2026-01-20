@@ -77,6 +77,12 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
       if (sessionId !== currentSessionId) {
         setCurrentSession(sessionId)
       }
+      // Update ref to match URL session ID (handles clicking different sessions in sidebar)
+      activeSessionRef.current = sessionId
+    } else {
+      // URL has no session ID - user clicked "New chat" or navigated to root
+      // Clear the ref so next message creates a new session
+      activeSessionRef.current = null
     }
   }, [sessionId, _hasHydrated, currentSessionId, setCurrentSession])
 
@@ -194,13 +200,15 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
 
     // Use existing session ID if available, otherwise create a temporary local one
     // This ensures messages are stored while we wait for the backend session ID
-    // IMPORTANT: Check the URL sessionId first, then fall back to currentSessionId in store
-    // This fixes the issue where second message creates a new session
-    let activeSessionId = sessionId || currentSessionId
+    // IMPORTANT: Check multiple sources for session ID to handle race conditions:
+    // 1. sessionId from URL (useParams) - may not update immediately after navigation
+    // 2. currentSessionId from store - should be updated but might have race conditions
+    // 3. activeSessionRef.current - persisted across renders, updated after session migration
+    let activeSessionId = sessionId || currentSessionId || activeSessionRef.current
     let isNewSession = !activeSessionId
     let tempSessionId = null
 
-    console.log('[ChatView] handleSend - sessionId from URL:', sessionId, 'currentSessionId from store:', currentSessionId, 'isNewSession:', isNewSession)
+    console.log('[ChatView] handleSend - sessionId from URL:', sessionId, 'currentSessionId from store:', currentSessionId, 'activeSessionRef:', activeSessionRef.current, 'isNewSession:', isNewSession)
 
     if (isNewSession) {
       // Create a temporary session so messages have somewhere to go
