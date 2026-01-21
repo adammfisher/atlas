@@ -1079,19 +1079,15 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
   // Also fixes missing space after bold text: "**Name:**Adam" → "**Name:** Adam"
   const fixMalformedMarkdown = (content) => {
     if (!content) return content
-    // Fix bold: ** text** → **text**
-    let fixed = content.replace(/\*\*\s+([^*]+)\*\*/g, '**$1**')
-    // Fix italic with asterisks: * text* → *text*
-    fixed = fixed.replace(/\*\s+([^*]+)\*/g, '*$1*')
-    // Fix bold with underscores: __ text__ → __text__
-    fixed = fixed.replace(/__\s+([^_]+)__/g, '__$1__')
-    // Fix italic with underscores: _ text_ → _text_
-    fixed = fixed.replace(/_\s+([^_]+)_/g, '_$1_')
-    // Fix missing space after closing bold marker: **text:**word → **text:** word
-    // This handles cases like "**Name:**Adam" → "**Name:** Adam"
-    fixed = fixed.replace(/\*\*([^*]+)\*\*(?=[A-Za-z])/g, '**$1** ')
-    // Same for underscores: __text:__word → __text:__ word
-    fixed = fixed.replace(/__([^_]+)__(?=[A-Za-z])/g, '__$1__ ')
+    let fixed = content
+
+    // Add blank line before lists that immediately follow bold headers
+    // Pattern: "**Header:**\n- item" → "**Header:**\n\n- item"
+    fixed = fixed.replace(/(\*\*[^*\n]+\*\*:?)\n(-\s)/g, '$1\n\n$2')
+
+    // Pattern: "**Header:**- item" → "**Header:**\n\n- item" (no newline at all)
+    fixed = fixed.replace(/(\*\*[^*\n]+\*\*:?)(-\s)/g, '$1\n\n$2')
+
     return fixed
   }
 
@@ -1129,7 +1125,7 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
     if (artifacts.length === 0) {
       // During streaming, clean out artifact tags from visible content
       let displayContent = isStreaming ? cleanStreamingContent(message.content) : message.content
-      // Fix malformed markdown syntax (e.g., "** text**" → "**text**")
+      // Fix malformed markdown syntax (ensure blank lines before lists)
       displayContent = fixMalformedMarkdown(displayContent)
       return (
         <ReactMarkdown
