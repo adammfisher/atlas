@@ -1076,6 +1076,7 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
 
   // Helper to fix malformed markdown bold/italic syntax
   // Fixes patterns like "** text**" or "__ text__" (space after opening marker)
+  // Also fixes missing space after bold text: "**Name:**Adam" → "**Name:** Adam"
   const fixMalformedMarkdown = (content) => {
     if (!content) return content
     // Fix bold: ** text** → **text**
@@ -1086,6 +1087,11 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
     fixed = fixed.replace(/__\s+([^_]+)__/g, '__$1__')
     // Fix italic with underscores: _ text_ → _text_
     fixed = fixed.replace(/_\s+([^_]+)_/g, '_$1_')
+    // Fix missing space after closing bold marker: **text:**word → **text:** word
+    // This handles cases like "**Name:**Adam" → "**Name:** Adam"
+    fixed = fixed.replace(/\*\*([^*]+)\*\*(?=[A-Za-z])/g, '**$1** ')
+    // Same for underscores: __text:__word → __text:__ word
+    fixed = fixed.replace(/__([^_]+)__(?=[A-Za-z])/g, '__$1__ ')
     return fixed
   }
 
