@@ -603,11 +603,12 @@ async function handleStreamingChatWithStream(userId, event, responseStream) {
         );
       } else {
         // Create new artifact
-        console.log(`[Artifacts] Creating new artifact: ${artifact.id}`);
+        console.log(`[Artifacts] Creating new artifact: ${artifact.id}` + (effectiveProjectId ? ` for project ${effectiveProjectId}` : ''));
         await putItem(ARTIFACTS_TABLE, {
           sessionId: activeSessionId,
           artifactId: artifact.id,
           userId: userId,
+          projectId: effectiveProjectId || null,
           title: artifact.title || artifact.name.replace(/\.[^.]+$/, ''),
           name: artifact.name,
           type: artifact.type,
@@ -1059,11 +1060,12 @@ async function handleStreamingChat(userId, event) {
         );
       } else {
         // Create new artifact
-        console.log(`[Artifacts] Creating new artifact: ${artifact.id}`);
+        console.log(`[Artifacts] Creating new artifact: ${artifact.id}` + (effectiveProjectId ? ` for project ${effectiveProjectId}` : ''));
         await putItem(ARTIFACTS_TABLE, {
           sessionId: activeSessionId,
           artifactId: artifact.id,
           userId: userId,
+          projectId: effectiveProjectId || null,
           title: artifact.title || artifact.name.replace(/\.[^.]+$/, ''),
           name: artifact.name,
           type: artifact.type,

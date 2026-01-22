@@ -67,13 +67,19 @@ function Sidebar() {
     updateSessionTitle,
     toggleSessionStar,
     deleteSession,
-    user,
     _hasHydrated,
     setSessions,
     sessionRefreshTrigger
   } = useChatStore()
 
-  const { logout } = useAuth()
+  const { user: authUser, logout } = useAuth()
+
+  // Build display user object from auth context
+  const user = authUser ? {
+    name: authUser.displayName || authUser.username,
+    initials: (authUser.displayName || authUser.username || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
+    plan: authUser.role === 'admin' ? 'Admin' : 'User'
+  } : null
 
   const [isLoadingSessions, setIsLoadingSessions] = useState(true)
 

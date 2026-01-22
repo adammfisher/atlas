@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1100" width="1400" height="1100">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="clientGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90D9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#357ABD;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="awsGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF9900;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E88B00;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="lambdaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF9900;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D86613;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="dynamoGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4053D6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2D3AB1;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="s3Grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#569A31;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3F7A23;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bedrockGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="cloudFrontGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8C4FFF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6B2FD9;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Arrow marker -->
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
+    </marker>
+    <marker id="arrowheadBlue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4A90D9" />
+    </marker>
+    <marker id="arrowheadOrange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#FF9900" />
+    </marker>
+    <marker id="arrowheadPurple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#8B5CF6" />
+    </marker>
+    <marker id="arrowheadGreen" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#569A31" />
+    </marker>
+
+    <!-- Drop shadow -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1400" height="1100" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="700" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#1e293b">
+    Atlas Web - Thin Client Architecture
+  </text>
+  <text x="700" y="65" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#64748b">
+    All AI Processing, Context Assembly, and Memory Management Happens Server-Side
+  </text>
+
+  <!-- ==================== CLIENT ZONE ==================== -->
+  <rect x="30" y="90" width="280" height="380" rx="10" fill="#EBF4FF" stroke="#4A90D9" stroke-width="2" filter="url(#shadow)"/>
+  <text x="170" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#1e40af">
+    CLIENT (Browser)
+  </text>
+  <text x="170" y="133" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#4A90D9">
+    Thin Client - Presentation Only
+  </text>
+
+  <!-- React App -->
+  <rect x="50" y="150" width="240" height="60" rx="8" fill="url(#clientGrad)" filter="url(#shadow)"/>
+  <text x="170" y="175" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">React + Vite Frontend</text>
+  <text x="170" y="195" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#dbeafe">UI Rendering Only</text>
+
+  <!-- Client Components -->
+  <rect x="50" y="225" width="110" height="45" rx="6" fill="white" stroke="#4A90D9" stroke-width="1"/>
+  <text x="105" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#1e40af">Zustand Store</text>
+  <text x="105" y="260" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#64748b">UI State Only</text>
+
+  <rect x="180" y="225" width="110" height="45" rx="6" fill="white" stroke="#4A90D9" stroke-width="1"/>
+  <text x="235" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#1e40af">LocalStorage</text>
+  <text x="235" y="260" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#64748b">Session Cache</text>
+
+  <!-- Client Features -->
+  <rect x="50" y="285" width="240" height="90" rx="6" fill="white" stroke="#4A90D9" stroke-width="1"/>
+  <text x="170" y="305" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#1e40af">Client Responsibilities:</text>
+  <text x="60" y="325" font-family="Arial, sans-serif" font-size="10" fill="#475569">• Render UI components</text>
+  <text x="60" y="340" font-family="Arial, sans-serif" font-size="10" fill="#475569">• Send user messages to API</text>
+  <text x="60" y="355" font-family="Arial, sans-serif" font-size="10" fill="#475569">• Display streamed responses</text>
+  <text x="60" y="370" font-family="Arial, sans-serif" font-size="10" fill="#475569">• Manage auth tokens</text>
+
+  <!-- What client DOESN'T do -->
+  <rect x="50" y="385" width="240" height="75" rx="6" fill="#FEF2F2" stroke="#EF4444" stroke-width="1"/>
+  <text x="170" y="405" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#DC2626">Client Does NOT:</text>
+  <text x="60" y="425" font-family="Arial, sans-serif" font-size="10" fill="#991B1B">✗ Process AI responses</text>
+  <text x="60" y="440" font-family="Arial, sans-serif" font-size="10" fill="#991B1B">✗ Assemble context/memory</text>
+  <text x="60" y="455" font-family="Arial, sans-serif" font-size="10" fill="#991B1B">✗ Store sensitive data</text>
+
+  <!-- ==================== AWS ZONE ==================== -->
+  <rect x="340" y="90" width="1030" height="990" rx="10" fill="#FFF7ED" stroke="#FF9900" stroke-width="2" filter="url(#shadow)"/>
+  <text x="855" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#C2410C">
+    AWS CLOUD - All Processing Happens Here
+  </text>
+  <text x="855" y="133" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#EA580C">
+    No Data Size Constraints - Unlimited Processing Capacity
+  </text>
+
+  <!-- CloudFront/S3 Static Hosting -->
+  <rect x="360" y="150" width="180" height="70" rx="8" fill="url(#cloudFrontGrad)" filter="url(#shadow)"/>
+  <text x="450" y="175" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">CloudFront + S3</text>
+  <text x="450" y="195" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#E9D5FF">Static Asset Hosting</text>
+  <text x="450" y="210" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#C4B5FD">atlas-frontend bucket</text>
+
+  <!-- Lambda Function URL -->
+  <rect x="560" y="150" width="200" height="70" rx="8" fill="url(#awsGrad)" filter="url(#shadow)"/>
+  <text x="660" y="175" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">Lambda Function URLs</text>
+  <text x="660" y="195" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#FEF3C7">API Gateway Alternative</text>
+  <text x="660" y="210" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#FDE68A">CORS + Auth Headers</text>
+
+  <!-- ==================== LAMBDA FUNCTIONS ==================== -->
+  <rect x="360" y="240" width="680" height="200" rx="8" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1" stroke-dasharray="5,3"/>
+  <text x="700" y="265" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#B45309">Lambda Functions - Business Logic Layer</text>
+
+  <!-- Auth Lambda -->
+  <rect x="380" y="285" width="120" height="70" rx="6" fill="url(#lambdaGrad)" filter="url(#shadow)"/>
+  <text x="440" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">Auth Lambda</text>
+  <text x="440" y="328" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#FEF3C7">JWT Generation</text>
+  <text x="440" y="343" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#FDE68A">User Validation</text>
+
+  <!-- Sessions Lambda -->
+  <rect x="520" y="285" width="120" height="70" rx="6" fill="url(#lambdaGrad)" filter="url(#shadow)"/>
+  <text x="580" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">Sessions</text>
+  <text x="580" y="328" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#FEF3C7">CRUD Operations</text>
+  <text x="580" y="343" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#FDE68A">User Isolation</text>
+
+  <!-- Projects Lambda -->
+  <rect x="660" y="285" width="120" height="70" rx="6" fill="url(#lambdaGrad)" filter="url(#shadow)"/>
+  <text x="720" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">Projects</text>
+  <text x="720" y="328" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#FEF3C7">Memory Mgmt</text>
+  <text x="720" y="343" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#FDE68A">Context Assembly</text>
+
+  <!-- Artifacts Lambda -->
+  <rect x="800" y="285" width="120" height="70" rx="6" fill="url(#lambdaGrad)" filter="url(#shadow)"/>
+  <text x="860" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">Artifacts</text>
+  <text x="860" y="328" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#FEF3C7">File Storage</text>
+  <text x="860" y="343" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#FDE68A">Content Types</text>
+
+  <!-- Insights Lambda -->
+  <rect x="940" y="285" width="120" height="70" rx="6" fill="url(#lambdaGrad)" filter="url(#shadow)"/>
+  <text x="1000" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="white">Insights</text>
+  <text x="1000" y="328" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#FEF3C7">AI Extraction</text>
+  <text x="1000" y="343" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#FDE68A">Semantic Memory</text>
+
+  <!-- Chat Lambda - MAIN -->
+  <rect x="520" y="370" width="400" height="60" rx="8" fill="url(#lambdaGrad)" stroke="#92400E" stroke-width="2" filter="url(#shadow)"/>
+  <text x="720" y="395" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">Chat Lambda - Core AI Orchestration</text>
+  <text x="720" y="415" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#FEF3C7">Context Assembly • Token Budget • Streaming • Artifact Detection</text>
+
+  <!-- ==================== CHAT LAMBDA DETAIL ==================== -->
+  <rect x="360" y="460" width="680" height="280" rx="8" fill="#F0FDF4" stroke="#22C55E" stroke-width="1" stroke-dasharray="5,3"/>
+  <text x="700" y="485" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#166534">Chat Lambda - Server-Side Processing (The Magic)</text>
+
+  <!-- Context Assembly -->
+  <rect x="380" y="500" width="200" height="110" rx="6" fill="white" stroke="#22C55E" stroke-width="1"/>
+  <text x="480" y="520" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#166534">Context Assembly</text>
+  <text x="390" y="540" font-family="Arial, sans-serif" font-size="9" fill="#475569">• System prompt (5K tokens)</text>
+  <text x="390" y="555" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Pinned files (50K tokens)</text>
+  <text x="390" y="570" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Project memory (15K)</text>
+  <text x="390" y="585" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Semantic memory (10K)</text>
+  <text x="390" y="600" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Conversation (100K)</text>
+
+  <!-- Token Budget -->
+  <rect x="600" y="500" width="200" height="110" rx="6" fill="white" stroke="#22C55E" stroke-width="1"/>
+  <text x="700" y="520" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#166534">Token Budget (200K)</text>
+  <text x="610" y="540" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Dynamic allocation</text>
+  <text x="610" y="555" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Priority-based trimming</text>
+  <text x="610" y="570" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Older messages first</text>
+  <text x="610" y="585" font-family="Arial, sans-serif" font-size="9" fill="#475569">• System prompt preserved</text>
+  <text x="610" y="600" font-family="Arial, sans-serif" font-size="9" fill="#475569">• No client-side limits</text>
+
+  <!-- Streaming Engine -->
+  <rect x="820" y="500" width="200" height="110" rx="6" fill="white" stroke="#22C55E" stroke-width="1"/>
+  <text x="920" y="520" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#166534">Streaming Engine</text>
+  <text x="830" y="540" font-family="Arial, sans-serif" font-size="9" fill="#475569">• SSE (Server-Sent Events)</text>
+  <text x="830" y="555" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Real-time token delivery</text>
+  <text x="830" y="570" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Artifact detection</text>
+  <text x="830" y="585" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Markdown parsing</text>
+  <text x="830" y="600" font-family="Arial, sans-serif" font-size="9" fill="#475569">• No response size limit</text>
+
+  <!-- AI Processing -->
+  <rect x="380" y="620" width="640" height="50" rx="6" fill="#DCFCE7" stroke="#22C55E" stroke-width="1"/>
+  <text x="700" y="640" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#166534">AI Processing Pipeline</text>
+  <text x="700" y="658" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#15803D">Request → Context Build → Bedrock API → Stream → Artifact Detect → Post-Process → Client</text>
+
+  <!-- Server handles everything callout -->
+  <rect x="380" y="680" width="640" height="50" rx="6" fill="#DBEAFE" stroke="#3B82F6" stroke-width="2"/>
+  <text x="700" y="702" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1D4ED8">
+    All AI Processing Happens Server-Side - No Browser Constraints
+  </text>
+  <text x="700" y="720" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#2563EB">Unlimited context, unlimited response length, full memory access</text>
+
+  <!-- ==================== STORAGE LAYER ==================== -->
+  <rect x="360" y="760" width="680" height="160" rx="8" fill="#F5F3FF" stroke="#8B5CF6" stroke-width="1" stroke-dasharray="5,3"/>
+  <text x="700" y="785" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#5B21B6">Data Storage Layer</text>
+
+  <!-- DynamoDB -->
+  <rect x="380" y="800" width="200" height="100" rx="6" fill="url(#dynamoGrad)" filter="url(#shadow)"/>
+  <text x="480" y="825" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">DynamoDB</text>
+  <text x="390" y="845" font-family="Arial, sans-serif" font-size="9" fill="#E0E7FF">• atlas-users</text>
+  <text x="390" y="860" font-family="Arial, sans-serif" font-size="9" fill="#E0E7FF">• atlas-sessions</text>
+  <text x="390" y="875" font-family="Arial, sans-serif" font-size="9" fill="#E0E7FF">• atlas-projects</text>
+  <text x="390" y="890" font-family="Arial, sans-serif" font-size="9" fill="#E0E7FF">• atlas-artifacts</text>
+
+  <!-- S3 Storage -->
+  <rect x="600" y="800" width="200" height="100" rx="6" fill="url(#s3Grad)" filter="url(#shadow)"/>
+  <text x="700" y="825" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">S3 Buckets</text>
+  <text x="610" y="845" font-family="Arial, sans-serif" font-size="9" fill="#D1FAE5">• atlas-frontend (static)</text>
+  <text x="610" y="860" font-family="Arial, sans-serif" font-size="9" fill="#D1FAE5">• atlas-artifacts (files)</text>
+  <text x="610" y="875" font-family="Arial, sans-serif" font-size="9" fill="#D1FAE5">• atlas-project-files</text>
+  <text x="610" y="890" font-family="Arial, sans-serif" font-size="9" fill="#D1FAE5">• Large content storage</text>
+
+  <!-- S3 Vectors -->
+  <rect x="820" y="800" width="200" height="100" rx="6" fill="url(#s3Grad)" filter="url(#shadow)"/>
+  <text x="920" y="825" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">S3 Vectors</text>
+  <text x="830" y="845" font-family="Arial, sans-serif" font-size="9" fill="#D1FAE5">• Semantic memory</text>
+  <text x="830" y="860" font-family="Arial, sans-serif" font-size="9" fill="#D1FAE5">• AI-extracted facts</text>
+  <text x="830" y="875" font-family="Arial, sans-serif" font-size="9" fill="#D1FAE5">• Project context</text>
+  <text x="830" y="890" font-family="Arial, sans-serif" font-size="9" fill="#D1FAE5">• Insights storage</text>
+
+  <!-- ==================== BEDROCK ==================== -->
+  <rect x="1070" y="240" width="280" height="200" rx="8" fill="#F3E8FF" stroke="#8B5CF6" stroke-width="1"/>
+  <text x="1210" y="265" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#6B21A8">AWS Bedrock</text>
+
+  <rect x="1090" y="280" width="240" height="70" rx="6" fill="url(#bedrockGrad)" filter="url(#shadow)"/>
+  <text x="1210" y="305" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">Claude Haiku 4.5</text>
+  <text x="1210" y="325" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#E9D5FF">us.anthropic.claude-3-5-haiku</text>
+  <text x="1210" y="340" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" fill="#C4B5FD">200K Context Window</text>
+
+  <rect x="1090" y="360" width="240" height="70" rx="6" fill="white" stroke="#8B5CF6" stroke-width="1"/>
+  <text x="1210" y="385" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#6B21A8">Capabilities</text>
+  <text x="1100" y="405" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Streaming responses</text>
+  <text x="1100" y="420" font-family="Arial, sans-serif" font-size="9" fill="#475569">• System prompts</text>
+  <text x="1220" y="405" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Multi-turn context</text>
+  <text x="1220" y="420" font-family="Arial, sans-serif" font-size="9" fill="#475569">• Native reasoning</text>
+
+  <!-- ==================== DATA FLOW ARROWS ==================== -->
+
+  <!-- Client to CloudFront (static) -->
+  <path d="M 290 180 L 355 180" stroke="#8C4FFF" stroke-width="2" fill="none" marker-end="url(#arrowheadPurple)"/>
+  <text x="322" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#6B21A8">Static</text>
+
+  <!-- Client to Lambda URLs (API) -->
+  <path d="M 290 200 L 555 200" stroke="#FF9900" stroke-width="2" fill="none" marker-end="url(#arrowheadOrange)"/>
+  <text x="420" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#C2410C">API Requests</text>
+
+  <!-- Lambda URLs to Lambdas -->
+  <path d="M 660 220 L 660 240" stroke="#FF9900" stroke-width="2" fill="none" marker-end="url(#arrowheadOrange)"/>
+
+  <!-- Chat Lambda to Bedrock -->
+  <path d="M 920 400 L 1085 340" stroke="#8B5CF6" stroke-width="2" fill="none" marker-end="url(#arrowheadPurple)"/>
+  <text x="1010" y="355" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#6B21A8">AI Request</text>
+
+  <!-- Bedrock back to Chat Lambda (streaming) -->
+  <path d="M 1085 360 L 920 420" stroke="#8B5CF6" stroke-width="2" stroke-dasharray="5,3" fill="none" marker-end="url(#arrowheadPurple)"/>
+  <text x="1020" y="405" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#6B21A8">SSE Stream</text>
+
+  <!-- Chat Lambda to Storage -->
+  <path d="M 720 430 L 720 455" stroke="#22C55E" stroke-width="2" fill="none" marker-end="url(#arrowheadGreen)"/>
+
+  <!-- Processing to Storage -->
+  <path d="M 700 740 L 700 755" stroke="#8B5CF6" stroke-width="2" fill="none" marker-end="url(#arrowheadPurple)"/>
+
+  <!-- Storage to Chat Lambda (context fetch) -->
+  <path d="M 600 760 L 500 680" stroke="#569A31" stroke-width="2" stroke-dasharray="5,3" fill="none" marker-end="url(#arrowheadGreen)"/>
+  <text x="530" y="730" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#166534">Context</text>
+
+  <!-- Client receives stream -->
+  <path d="M 555 210 L 290 320" stroke="#4A90D9" stroke-width="2" stroke-dasharray="5,3" fill="none" marker-end="url(#arrowheadBlue)"/>
+  <text x="400" y="280" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="#1e40af">SSE Response</text>
+
+  <!-- ==================== KEY INSIGHT BOXES ==================== -->
+
+  <!-- Unlimited Data Flow -->
+  <rect x="1070" y="480" width="280" height="120" rx="8" fill="#ECFDF5" stroke="#10B981" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1210" y="505" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#047857">No Data Constraints</text>
+  <text x="1085" y="530" font-family="Arial, sans-serif" font-size="10" fill="#065F46">✓ Unlimited context assembly</text>
+  <text x="1085" y="548" font-family="Arial, sans-serif" font-size="10" fill="#065F46">✓ Unlimited response streaming</text>
+  <text x="1085" y="566" font-family="Arial, sans-serif" font-size="10" fill="#065F46">✓ Full memory access</text>
+  <text x="1085" y="584" font-family="Arial, sans-serif" font-size="10" fill="#065F46">✓ No browser memory limits</text>
+
+  <!-- Security -->
+  <rect x="1070" y="620" width="280" height="100" rx="8" fill="#FEF3C7" stroke="#F59E0B" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1210" y="645" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#B45309">Security</text>
+  <text x="1085" y="670" font-family="Arial, sans-serif" font-size="10" fill="#92400E">✓ JWT auth (10hr expiry)</text>
+  <text x="1085" y="688" font-family="Arial, sans-serif" font-size="10" fill="#92400E">✓ HttpOnly cookies</text>
+  <text x="1085" y="706" font-family="Arial, sans-serif" font-size="10" fill="#92400E">✓ User data isolation</text>
+
+  <!-- User Isolation -->
+  <rect x="1070" y="740" width="280" height="80" rx="8" fill="#DBEAFE" stroke="#3B82F6" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1210" y="765" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1D4ED8">User Isolation</text>
+  <text x="1085" y="790" font-family="Arial, sans-serif" font-size="10" fill="#1E40AF">✓ All queries filtered by userId</text>
+  <text x="1085" y="808" font-family="Arial, sans-serif" font-size="10" fill="#1E40AF">✓ S3 paths include userId</text>
+
+  <!-- ==================== LEGEND ==================== -->
+  <rect x="30" y="490" width="280" height="180" rx="8" fill="white" stroke="#CBD5E1" stroke-width="1"/>
+  <text x="170" y="515" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1e293b">Data Flow Legend</text>
+
+  <line x1="50" y1="540" x2="100" y2="540" stroke="#4A90D9" stroke-width="2"/>
+  <text x="110" y="544" font-family="Arial, sans-serif" font-size="10" fill="#475569">Client response (SSE)</text>
+
+  <line x1="50" y1="565" x2="100" y2="565" stroke="#FF9900" stroke-width="2"/>
+  <text x="110" y="569" font-family="Arial, sans-serif" font-size="10" fill="#475569">API requests</text>
+
+  <line x1="50" y1="590" x2="100" y2="590" stroke="#8B5CF6" stroke-width="2"/>
+  <text x="110" y="594" font-family="Arial, sans-serif" font-size="10" fill="#475569">AI processing</text>
+
+  <line x1="50" y1="615" x2="100" y2="615" stroke="#569A31" stroke-width="2"/>
+  <text x="110" y="619" font-family="Arial, sans-serif" font-size="10" fill="#475569">Storage operations</text>
+
+  <line x1="50" y1="640" x2="100" y2="640" stroke="#666" stroke-width="2" stroke-dasharray="5,3"/>
+  <text x="110" y="644" font-family="Arial, sans-serif" font-size="10" fill="#475569">Streaming / async</text>
+
+  <!-- Tech Stack -->
+  <rect x="30" y="690" width="280" height="140" rx="8" fill="white" stroke="#CBD5E1" stroke-width="1"/>
+  <text x="170" y="715" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1e293b">Tech Stack</text>
+  <text x="45" y="740" font-family="Arial, sans-serif" font-size="10" fill="#475569">Frontend: React 19, Vite, Zustand</text>
+  <text x="45" y="758" font-family="Arial, sans-serif" font-size="10" fill="#475569">Backend: Node.js 20, Lambda</text>
+  <text x="45" y="776" font-family="Arial, sans-serif" font-size="10" fill="#475569">AI: AWS Bedrock, Claude Haiku 4.5</text>
+  <text x="45" y="794" font-family="Arial, sans-serif" font-size="10" fill="#475569">Storage: DynamoDB, S3</text>
+  <text x="45" y="812" font-family="Arial, sans-serif" font-size="10" fill="#475569">Infra: Terraform, CloudFront</text>
+
+  <!-- Version -->
+  <text x="170" y="1080" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#94a3b8">Atlas Web Architecture v1.0 - January 2026</text>
+</svg>

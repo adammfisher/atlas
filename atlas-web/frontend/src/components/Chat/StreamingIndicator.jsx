@@ -175,17 +175,20 @@ const LOADING_PHRASES = [
   "Avengers-assembling"
 ]
 
-function StreamingIndicator({ streamKey }) {
+function StreamingIndicator({ streamKey, isThinking = false }) {
   // Pick a random phrase - use streamKey to ensure new phrase on each stream
   const phrase = useMemo(() => {
     const randomIndex = Math.floor(Math.random() * LOADING_PHRASES.length)
     return LOADING_PHRASES[randomIndex]
   }, [streamKey])
 
+  // When thinking is active, show "Thinking..." instead of random phrases
+  const displayText = isThinking ? 'Thinking' : phrase
+
   return (
     <div className="flex items-center gap-2 py-2">
       <div className="streaming-loader" />
-      <span className="shimmer-text">{phrase}...</span>
+      <span className="shimmer-text">{displayText}...</span>
     </div>
   )
 }

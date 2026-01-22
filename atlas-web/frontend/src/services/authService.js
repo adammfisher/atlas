@@ -6,6 +6,38 @@
 const API_BASE = import.meta.env.VITE_API_URL || '';
 const AUTH_TOKEN_KEY = 'atlas_auth_token';
 
+// Global auth error handler - set by AuthContext
+let onAuthError = null;
+
+/**
+ * Set the global auth error handler
+ * Called by AuthContext to register its logout function
+ */
+export function setAuthErrorHandler(handler) {
+  onAuthError = handler;
+}
+
+/**
+ * Handle authentication errors (401/403)
+ * Triggers redirect to login page
+ */
+export function handleAuthError() {
+  console.log('[Auth] Session expired or invalid, redirecting to login');
+  clearAuthToken();
+  if (onAuthError) {
+    onAuthError();
+  }
+}
+
+/**
+ * Check if a response indicates an auth error
+ * @param {Response} response - Fetch response
+ * @returns {boolean}
+ */
+export function isAuthError(response) {
+  return response.status === 401 || response.status === 403;
+}
+
 /**
  * Store auth token for cross-domain requests (Lambda Function URL)
  * @param {string} token - JWT token

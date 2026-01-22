@@ -21,6 +21,7 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
   const [isFirstMessage, setIsFirstMessage] = useState(true)
   const [thinkingSteps, setThinkingSteps] = useState([])
   const [showThinkingSteps, setShowThinkingSteps] = useState(false)
+  const [isExtendedThinkingActive, setIsExtendedThinkingActive] = useState(false)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [knowledgeContext, setKnowledgeContext] = useState(null)
   const messagesEndRef = useRef(null)
@@ -257,6 +258,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
     setCompletedStreamingArtifacts([])
     // Show steps panel for extended thinking OR web search
     setShowThinkingSteps(extendedThinkingEnabled || webSearchEnabled)
+    // Track extended thinking separately for "Thinking..." indicator
+    setIsExtendedThinkingActive(extendedThinkingEnabled)
 
     const shouldGenerateTitle = isFirstMessage && !currentSession?.title
     setIsFirstMessage(false)
@@ -981,6 +984,7 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
                     isStreaming={message.isStreaming && isStreaming}
                     steps={message.role === 'assistant' ? message.thinkingSteps : null}
                     showSteps={message.thinkingSteps && message.thinkingSteps.length > 0}
+                    isThinkingEnabled={message.isStreaming && isExtendedThinkingActive}
                     fontFamily={fontFamilies[chatFont] || fontFamilies.default}
                     onOpenArtifactInPanel={onOpenArtifactInPanel}
                     onViewKnowledgeArtifact={handleViewKnowledgeArtifact}
@@ -1033,7 +1037,7 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
   )
 }
 
-function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onOpenArtifactInPanel, onViewKnowledgeArtifact, streamingArtifact, completedStreamingArtifacts = [] }) {
+function MessageBubble({ message, isStreaming, steps, showSteps, isThinkingEnabled = false, fontFamily, onOpenArtifactInPanel, onViewKnowledgeArtifact, streamingArtifact, completedStreamingArtifacts = [] }) {
   const isUser = message.role === 'user'
 
   // Parse message for artifacts (memoized to avoid re-parsing on every render)
@@ -1259,7 +1263,10 @@ function MessageBubble({ message, isStreaming, steps, showSteps, fontFamily, onO
       )}
       {/* Show streaming indicator below content while streaming */}
       {isStreaming && (
-        <StreamingIndicator streamKey={message.id} />
+        <StreamingIndicator
+          streamKey={message.id}
+          isThinking={isThinkingEnabled && (!message.content || message.content.trim() === '')}
+        />
       )}
     </div>
   )

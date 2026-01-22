@@ -1,5 +1,4 @@
-// Insights uses mock server (localhost:8000) until backend is implemented
-const INSIGHTS_API_URL = import.meta.env.VITE_INSIGHTS_API_URL || 'http://localhost:8000'
+const INSIGHTS_API_URL = import.meta.env.VITE_INSIGHTS_API_URL || ''
 
 // Helper to add credentials to fetch requests
 const withCredentials = (options = {}) => ({

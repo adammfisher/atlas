@@ -14,8 +14,10 @@ import {
   Trash2,
   ArrowUp
 } from 'lucide-react'
-import { projectsService, sessionsService } from '../../services/chatService'
+import { projectsService, sessionsService, artifactsService } from '../../services/chatService'
 import { useChatStore } from '../../hooks/useChatStore'
+import FileCard from './FileCard'
+import FileViewerModal from './FileViewerModal'
 
 // Model selection disabled - using Haiku as default
 // const MODELS = [
@@ -31,6 +33,7 @@ function ProjectDetailView() {
 
   const [project, setProject] = useState(null)
   const [files, setFiles] = useState([])
+  const [artifacts, setArtifacts] = useState([])
   const [memory, setMemory] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isStarred, setIsStarred] = useState(false)
@@ -39,6 +42,7 @@ function ProjectDetailView() {
   const [showMemoryModal, setShowMemoryModal] = useState(false)
   const [showInstructionsModal, setShowInstructionsModal] = useState(false)
   const [showMenuDropdown, setShowMenuDropdown] = useState(false)
+  const [viewingFile, setViewingFile] = useState(null) // File viewer modal
 
   // Instructions editing
   const [instructions, setInstructions] = useState('')
@@ -73,14 +77,16 @@ function ProjectDetailView() {
     const loadProject = async () => {
       setIsLoading(true)
       try {
-        const [projectData, filesData, memoryData] = await Promise.all([
+        const [projectData, filesData, memoryData, artifactsData] = await Promise.all([
           projectsService.get(projectId),
           projectsService.listFiles(projectId).catch(() => []),
-          projectsService.getMemory(projectId).catch(() => null)
+          projectsService.getMemory(projectId).catch(() => null),
+          artifactsService.listForProject(projectId).catch(() => [])
         ])
 
         setProject(projectData)
         setFiles(filesData || [])
+        setArtifacts(artifactsData || [])
         setMemory(memoryData)
         setInstructions(projectData.instructions || '')
         setIsStarred(projectData.starred || false)
@@ -593,32 +599,25 @@ function ProjectDetailView() {
               </p>
             </div>
 
-            {/* Files List */}
+            {/* Files Grid */}
             {files.length === 0 ? (
               <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
                 No files yet
               </p>
             ) : (
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-3">
                 {files.map(file => (
-                  <div
-                    key={file.id}
-                    className="flex items-center gap-2 p-2 rounded-lg group"
-                    style={{ backgroundColor: 'var(--bg-secondary)' }}
-                  >
-                    <FileText size={16} style={{ color: 'var(--text-muted)' }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate" style={{ color: 'var(--text-primary)' }}>
-                        {file.filename}
-                      </p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {file.tokenCount?.toLocaleString() || 0} tokens
-                      </p>
-                    </div>
+                  <div key={file.id} className="relative group">
+                    <FileCard
+                      file={{ ...file, name: file.filename || file.name }}
+                      onClick={() => setViewingFile(file)}
+                    />
+                    {/* Delete button overlay */}
                     <button
-                      onClick={() => handleDeleteFile(file.id)}
-                      className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-[var(--bg-tertiary)] transition-opacity"
-                      style={{ color: 'var(--text-muted)' }}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteFile(file.id); }}
+                      className="absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}
+                      title="Delete file"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -627,6 +626,42 @@ function ProjectDetailView() {
               </div>
             )}
           </div>
+
+          {/* Artifacts Section */}
+          {artifacts.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                  Artifacts
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                  {artifacts.length}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {artifacts.map(artifact => (
+                  <div key={artifact.id || artifact.artifactId} className="relative group">
+                    <FileCard
+                      file={{
+                        id: artifact.id || artifact.artifactId,
+                        name: artifact.name || artifact.title + (artifact.file_extension || ''),
+                        type: artifact.content_type || artifact.type,
+                        tokenCount: artifact.size ? Math.round(artifact.size / 4) : null
+                      }}
+                      onClick={() => setViewingFile({
+                        ...artifact,
+                        id: artifact.id || artifact.artifactId,
+                        fileId: artifact.id || artifact.artifactId,
+                        name: artifact.name || artifact.title + (artifact.file_extension || ''),
+                        type: artifact.content_type || artifact.type,
+                        isArtifact: true
+                      })}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -950,6 +985,16 @@ function ProjectDetailView() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* File Viewer Modal */}
+      {viewingFile && (
+        <FileViewerModal
+          file={{ ...viewingFile, name: viewingFile.filename || viewingFile.name }}
+          projectId={projectId}
+          projectName={project?.name}
+          onClose={() => setViewingFile(null)}
+        />
       )}
     </div>
   )

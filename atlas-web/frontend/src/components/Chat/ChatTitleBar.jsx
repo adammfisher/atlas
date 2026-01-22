@@ -16,14 +16,18 @@ function ChatTitleBar({ onRename, onDelete, onAddToProject, artifactsCount = 0, 
   const dropdownRef = useRef(null)
   const inputRef = useRef(null)
 
-  const { projectId } = useParams()
+  const { projectId: urlProjectId } = useParams()
   const { sessions, projects, currentSessionId, updateSessionTitle, toggleSessionStar } = useChatStore()
 
   // Compute current session from sessions and currentSessionId
   const currentSession = sessions.find(s => s.id === currentSessionId) || null
 
+  // Get project ID from URL or from session's projectId property
+  // This ensures project badge shows even when accessing chat directly from sidebar
+  const effectiveProjectId = urlProjectId || currentSession?.projectId
+
   // Get current project if in a project context
-  const currentProject = projectId ? projects.find(p => p.id === projectId) : null
+  const currentProject = effectiveProjectId ? projects.find(p => p.id === effectiveProjectId) : null
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -89,10 +93,10 @@ function ChatTitleBar({ onRename, onDelete, onAddToProject, artifactsCount = 0, 
   return (
     <div className="h-12 border-b border-[var(--border-color)] flex items-center justify-between px-4">
       <div className="flex items-center gap-2">
-        {/* Project badge if in a project context */}
+        {/* Project badge if chat belongs to a project */}
         {currentProject && (
           <Link
-            to={`/project/${projectId}/settings`}
+            to={`/project/${effectiveProjectId}/settings`}
             className="flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors group"
             style={{ backgroundColor: 'rgba(205, 71, 126, 0.1)', color: '#CD477E' }}
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(205, 71, 126, 0.2)'}

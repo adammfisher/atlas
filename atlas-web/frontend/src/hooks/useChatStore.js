@@ -36,12 +36,9 @@ export const useChatStore = create(
         { id: 'gitlab', name: 'GitLab', icon: '🦊' },
       ],
 
-      // User settings
-      user: {
-        name: 'Adam M Fisher',
-        initials: 'AM',
-        plan: 'Ally ID: WZYN80'
-      },
+      // User settings - these are now populated from AuthContext
+      // Kept here for backwards compatibility but should use useAuth() hook instead
+      user: null,
 
       // Appearance settings
       colorMode: 'dark', // 'light', 'auto', 'dark'
@@ -340,6 +337,23 @@ export const useChatStore = create(
       triggerSessionRefresh: () => set((state) => ({
         sessionRefreshTrigger: state.sessionRefreshTrigger + 1
       })),
+
+      // Set user from auth context
+      setUser: (user) => set({ user }),
+
+      // Clear all user data on logout - CRITICAL for user isolation
+      clearUserData: () => {
+        console.log('[useChatStore] Clearing all user data for logout')
+        set({
+          user: null,
+          sessions: [],
+          projects: [],
+          messagesBySession: {},
+          currentSessionId: null,
+          projectMemoryContext: {},
+          pendingFiles: [],
+        })
+      },
     }),
     {
       name: 'ally-chat-store',

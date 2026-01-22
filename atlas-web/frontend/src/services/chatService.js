@@ -4,7 +4,23 @@
  * Cross-domain requests (Lambda Function URL) use Authorization Bearer header
  */
 
-import { getAuthToken } from './authService'
+import { getAuthToken, isAuthError, handleAuthError } from './authService'
+
+/**
+ * Check response for auth errors and handle appropriately
+ * @param {Response} response - Fetch response
+ * @param {string} operation - Description of the operation for error message
+ * @throws {Error} If response is not ok
+ */
+function checkResponse(response, operation) {
+  if (isAuthError(response)) {
+    handleAuthError();
+    throw new Error('Session expired. Please log in again.');
+  }
+  if (!response.ok) {
+    throw new Error(`Failed to ${operation}`);
+  }
+}
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const STREAM_URL = import.meta.env.VITE_STREAM_URL || null
@@ -177,7 +193,7 @@ export const chatService = {
       }),
       signal
     }))
-    if (!response.ok) throw new Error('Failed to send message')
+    checkResponse(response, 'send message')
     await this._processStream(response, onChunk, onComplete, onThinking, onSearchStart, onSearchResults, onProcessing, onArtifact, onKnowledgeContext, onMemoryContext, onCompaction)
   },
 
@@ -221,7 +237,7 @@ export const chatService = {
       }),
       signal
     }))
-    if (!response.ok) throw new Error('Failed to send message with files')
+    checkResponse(response, 'send message with files')
     await this._processStream(response, onChunk, onComplete, onThinking, onSearchStart, onSearchResults, onProcessing, onArtifact, null, onMemoryContext, onCompaction)
   },
 
@@ -323,7 +339,7 @@ export const chatService = {
 export const sessionsService = {
   async list() {
     const res = await fetch(`${API_URL}/api/sessions`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to list sessions')
+    checkResponse(res, 'list sessions')
     return (await res.json()).sessions
   },
   async create(data = {}) {
@@ -332,65 +348,71 @@ export const sessionsService = {
       headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify(data)
     })
-    if (!res.ok) throw new Error('Failed to create session')
+    checkResponse(res, 'create session')
     return res.json()
   },
   async getMessages(sessionId) {
     const res = await fetch(`${API_URL}/api/sessions/${sessionId}/messages`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to get messages')
+    checkResponse(res, 'get messages')
     return (await res.json()).messages
   },
   async update(sessionId, updates) {
     const res = await fetch(`${API_URL}/api/sessions/${sessionId}`, fetchWithCredentials({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }))
-    if (!res.ok) throw new Error('Failed to update session')
+    checkResponse(res, 'update session')
     return res.json()
   },
   async delete(sessionId) {
     const res = await fetch(`${API_URL}/api/sessions/${sessionId}`, fetchWithCredentials({ method: 'DELETE' }))
-    if (!res.ok) throw new Error('Failed to delete session')
+    checkResponse(res, 'delete session')
   }
 }
 
 export const projectsService = {
   async list(status = 'active') {
     const res = await fetch(`${API_URL}/api/projects?status=${status}`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to list projects')
+    checkResponse(res, 'list projects')
     return (await res.json()).projects
   },
 
   async get(projectId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to get project')
+    checkResponse(res, 'get project')
     return res.json()
   },
 
   async create(project) {
     const res = await fetch(`${API_URL}/api/projects`, fetchWithCredentials({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(project) }))
-    if (!res.ok) throw new Error('Failed to create project')
+    checkResponse(res, 'create project')
     return res.json()
   },
 
   async update(projectId, updates) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}`, fetchWithCredentials({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }))
-    if (!res.ok) throw new Error('Failed to update project')
+    checkResponse(res, 'update project')
     return res.json()
   },
 
   async delete(projectId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}`, fetchWithCredentials({ method: 'DELETE' }))
-    if (!res.ok) throw new Error('Failed to delete project')
+    checkResponse(res, 'delete project')
   },
 
   // File management
   async listFiles(projectId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/files`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to list files')
+    checkResponse(res, 'list files')
     return (await res.json()).files
   },
 
   async getFile(projectId, fileId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to get file')
+    checkResponse(res, 'get file')
+    return res.json()
+  },
+
+  async getFileContent(projectId, fileId) {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}?content=true`, fetchWithCredentials())
+    checkResponse(res, 'get file content')
     return res.json()
   },
 
@@ -405,7 +427,7 @@ export const projectsService = {
       headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size, pinned })
     })
-    if (!presignRes.ok) throw new Error('Failed to get upload URL')
+    checkResponse(presignRes, 'get upload URL')
     const { uploadUrl, file: fileInfo } = await presignRes.json()
     await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
     return fileInfo
@@ -434,7 +456,7 @@ export const projectsService = {
       })
     })
 
-    if (!res.ok) throw new Error('Failed to upload and extract zip file')
+    checkResponse(res, 'upload and extract zip file')
     return res.json()
   },
 
@@ -444,7 +466,7 @@ export const projectsService = {
       headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify(updates)
     })
-    if (!res.ok) throw new Error('Failed to update file')
+    checkResponse(res, 'update file')
     return res.json()
   },
 
@@ -454,13 +476,13 @@ export const projectsService = {
       headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ pinned })
     })
-    if (!res.ok) throw new Error('Failed to toggle file pin')
+    checkResponse(res, 'toggle file pin')
     return res.json()
   },
 
   async deleteFile(projectId, fileId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/files/${fileId}`, fetchWithCredentials({ method: 'DELETE' }))
-    if (!res.ok) throw new Error('Failed to delete file')
+    checkResponse(res, 'delete file')
   },
 
   // Save artifact as project file
@@ -471,14 +493,14 @@ export const projectsService = {
       credentials: 'include',
       body: JSON.stringify({ filename, content, artifactId, artifactTitle, pinned })
     })
-    if (!res.ok) throw new Error('Failed to save artifact to project')
+    checkResponse(res, 'save artifact to project')
     return res.json()
   },
 
   // Memory management
   async getMemory(projectId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/memory`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to get project memory')
+    checkResponse(res, 'get project memory')
     return res.json()
   },
 
@@ -488,7 +510,7 @@ export const projectsService = {
       headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ sections })
     })
-    if (!res.ok) throw new Error('Failed to update project memory')
+    checkResponse(res, 'update project memory')
     return res.json()
   },
 
@@ -497,7 +519,7 @@ export const projectsService = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }, credentials: 'include'
     })
-    if (!res.ok) throw new Error('Failed to regenerate project memory')
+    checkResponse(res, 'regenerate project memory')
     return res.json()
   },
 
@@ -505,7 +527,7 @@ export const projectsService = {
   async listSemanticMemories(projectId, query = null) {
     const params = query ? `?query=${encodeURIComponent(query)}` : ''
     const res = await fetch(`${API_URL}/api/projects/${projectId}/memories${params}`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to list semantic memories')
+    checkResponse(res, 'list semantic memories')
     return res.json()
   },
 
@@ -516,7 +538,7 @@ export const projectsService = {
       credentials: 'include',
       body: JSON.stringify({ content, category })
     })
-    if (!res.ok) throw new Error('Failed to add semantic memory')
+    checkResponse(res, 'add semantic memory')
     return res.json()
   },
 
@@ -527,7 +549,7 @@ export const projectsService = {
       credentials: 'include',
       body: JSON.stringify({ content, category })
     })
-    if (!res.ok) throw new Error('Failed to update semantic memory')
+    checkResponse(res, 'update semantic memory')
     return res.json()
   },
 
@@ -536,19 +558,19 @@ export const projectsService = {
       method: 'DELETE',
       credentials: 'include'
     })
-    if (!res.ok) throw new Error('Failed to delete semantic memory')
+    checkResponse(res, 'delete semantic memory')
   },
 
   // Chats/sessions within a project
   async listChats(projectId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/chats`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to list project chats')
+    checkResponse(res, 'list project chats')
     return (await res.json()).chats
   },
 
   async deleteChat(projectId, chatId) {
     const res = await fetch(`${API_URL}/api/projects/${projectId}/chats/${chatId}`, fetchWithCredentials({ method: 'DELETE' }))
-    if (!res.ok) throw new Error('Failed to delete chat')
+    checkResponse(res, 'delete chat')
   }
 }
 
@@ -556,28 +578,30 @@ export const artifactsService = {
   async listForSession(sessionId) {
     console.log('[artifactsService] Fetching artifacts for session:', sessionId)
     const res = await fetch(`${API_URL}/api/sessions/${sessionId}/artifacts`, fetchWithCredentials())
-    if (!res.ok) {
-      console.error('[artifactsService] Failed to list artifacts:', res.status, res.statusText)
-      throw new Error('Failed to list artifacts')
-    }
+    checkResponse(res, 'list artifacts')
     const data = await res.json()
     console.log('[artifactsService] Got', data.artifacts?.length || 0, 'artifacts for session')
+    return data.artifacts
+  },
+  async listForProject(projectId) {
+    console.log('[artifactsService] Fetching artifacts for project:', projectId)
+    const res = await fetch(`${API_URL}/api/artifacts?project_id=${projectId}`, fetchWithCredentials())
+    checkResponse(res, 'list project artifacts')
+    const data = await res.json()
+    console.log('[artifactsService] Got', data.artifacts?.length || 0, 'artifacts for project')
     return data.artifacts
   },
   async listAll() {
     console.log('[artifactsService] Fetching all artifacts')
     const res = await fetch(`${API_URL}/api/artifacts`, fetchWithCredentials())
-    if (!res.ok) {
-      console.error('[artifactsService] Failed to list all artifacts:', res.status, res.statusText)
-      throw new Error('Failed to list all artifacts')
-    }
+    checkResponse(res, 'list all artifacts')
     const data = await res.json()
     console.log('[artifactsService] Got', data.artifacts?.length || 0, 'total artifacts')
     return data.artifacts
   },
   async getContent(sessionId, artifactId) {
     const res = await fetch(`${API_URL}/api/artifacts/${artifactId}/content?sessionId=${sessionId}`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to get artifact content')
+    checkResponse(res, 'get artifact content')
     return (await res.text())
   }
 }
@@ -585,26 +609,26 @@ export const artifactsService = {
 export const mcpService = {
   async list() {
     const res = await fetch(`${API_URL}/api/mcp/servers`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to list MCP servers')
+    checkResponse(res, 'list MCP servers')
     return (await res.json()).servers
   },
   async create(server) {
     const res = await fetch(`${API_URL}/api/mcp/servers`, fetchWithCredentials({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(server) }))
-    if (!res.ok) throw new Error('Failed to create MCP server')
+    checkResponse(res, 'create MCP server')
     return res.json()
   },
   async update(serverId, updates) {
     const res = await fetch(`${API_URL}/api/mcp/servers/${serverId}`, fetchWithCredentials({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }))
-    if (!res.ok) throw new Error('Failed to update MCP server')
+    checkResponse(res, 'update MCP server')
     return res.json()
   },
   async delete(serverId) {
     const res = await fetch(`${API_URL}/api/mcp/servers/${serverId}`, fetchWithCredentials({ method: 'DELETE' }))
-    if (!res.ok) throw new Error('Failed to delete MCP server')
+    checkResponse(res, 'delete MCP server')
   },
   async getTools() {
     const res = await fetch(`${API_URL}/api/mcp/tools`, fetchWithCredentials())
-    if (!res.ok) throw new Error('Failed to get MCP tools')
+    checkResponse(res, 'get MCP tools')
     return res.json()
   },
   async executeTool(tool, args, serverId = null) {
@@ -613,7 +637,7 @@ export const mcpService = {
       headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ tool, arguments: args, server_id: serverId })
     })
-    if (!res.ok) throw new Error('Failed to execute MCP tool')
+    checkResponse(res, 'execute MCP tool')
     return res.json()
   }
 }

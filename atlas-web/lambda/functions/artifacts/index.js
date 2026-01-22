@@ -104,6 +104,7 @@ async function createArtifact(event, userId) {
 
   const {
     session_id: sessionId,
+    project_id: projectId,
     title,
     content,
     file_extension: fileExtension,
@@ -135,6 +136,7 @@ async function createArtifact(event, userId) {
     sessionId,
     artifactId,
     userId,
+    projectId: projectId || null, // Link to project if provided
     title,
     name: `${title}${fileExtension}`,
     fileExtension,
@@ -173,6 +175,7 @@ async function createArtifact(event, userId) {
  */
 async function listAllArtifacts(event, userId) {
   const sessionId = getQueryParam(event, 'session_id');
+  const projectId = getQueryParam(event, 'project_id');
   const category = getQueryParam(event, 'type');
   const fileExtension = getQueryParam(event, 'file_extension');
   const limit = parseInt(getQueryParam(event, 'limit', '100'));
@@ -184,7 +187,7 @@ async function listAllArtifacts(event, userId) {
   }
 
   // Query all artifacts for this user using the userId-createdAt GSI
-  const artifacts = await queryItems(ARTIFACTS_TABLE, {
+  let artifacts = await queryItems(ARTIFACTS_TABLE, {
     expression: 'userId = :userId',
     values: { ':userId': userId }
   }, {
@@ -192,6 +195,12 @@ async function listAllArtifacts(event, userId) {
     ascending: false, // Most recent first
     limit: limit
   });
+
+  // If projectId provided, filter results client-side
+  // (DynamoDB GSI doesn't support filtering by projectId directly)
+  if (projectId) {
+    artifacts = artifacts.filter(a => a.projectId === projectId);
+  }
 
   // Generate download URLs and map response format
   const artifactsWithUrls = await Promise.all(

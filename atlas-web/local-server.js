@@ -13,8 +13,17 @@ const path = require('path');
 
 const app = express();
 // Configure CORS to allow credentials (cookies) from frontend
+// Allow multiple ports for development flexibility
+const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173'];
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -928,6 +937,27 @@ app.post('/api/projects/:projectId/files', async (req, res) => {
   }
 });
 
+// Get single file (with optional content)
+app.get('/api/projects/:projectId/files/:fileId', async (req, res) => {
+  try {
+    // Pass query params (e.g., ?content=true)
+    const queryString = Object.keys(req.query).length > 0
+      ? '?' + new URLSearchParams(req.query).toString()
+      : '';
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/files/${req.params.fileId}${queryString}`, {
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Get file error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Toggle file pin
 app.put('/api/projects/:projectId/files/:fileId/pin', async (req, res) => {
   try {
@@ -951,6 +981,7 @@ app.put('/api/projects/:projectId/files/:fileId/pin', async (req, res) => {
 // Delete file from project
 app.delete('/api/projects/:projectId/files/:fileId', async (req, res) => {
   try {
+    console.log('[Proxy] Deleting file:', req.params.fileId, 'from project:', req.params.projectId);
     const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/files/${req.params.fileId}`, {
       method: 'DELETE',
       headers: {
@@ -958,10 +989,43 @@ app.delete('/api/projects/:projectId/files/:fileId', async (req, res) => {
         'X-User-Id': req.headers['x-user-id'] || 'demo-user'
       }
     });
-    const data = await response.json();
-    res.json(data);
+    // DELETE typically returns 204 No Content
+    if (response.status === 204 || response.ok) {
+      console.log('[Proxy] File deleted successfully');
+      return res.status(204).send();
+    }
+    // If there's an error, try to get JSON body
+    const data = await response.json().catch(() => ({ error: 'Delete failed' }));
+    console.error('[Proxy] Delete file error:', response.status, data);
+    res.status(response.status).json(data);
   } catch (error) {
     console.error('[Proxy] Delete file error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save artifact as project file (add to product knowledge)
+app.post('/api/projects/:projectId/files/from-artifact', async (req, res) => {
+  try {
+    console.log('[Proxy] Saving artifact to project:', req.params.projectId, req.body.filename);
+    const response = await fetch(`${AWS_API_URL}/api/projects/${req.params.projectId}/files/from-artifact`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('[Proxy] Save artifact error:', response.status, data);
+      return res.status(response.status).json(data);
+    }
+    console.log('[Proxy] Artifact saved successfully:', data.file?.filename || data.filename);
+    res.json(data);
+  } catch (error) {
+    console.error('[Proxy] Save artifact error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1055,6 +1119,46 @@ app.get('/api/settings/mock-mode', (req, res) => {
 // Artifacts endpoint for sessions - returns empty for now
 app.get('/api/sessions/:sessionId/artifacts', (req, res) => {
   res.json({ artifacts: [] });
+});
+
+// List all artifacts for user - proxy to AWS API (supports ?project_id filter)
+app.get('/api/artifacts', async (req, res) => {
+  try {
+    const queryString = Object.keys(req.query).length > 0
+      ? '?' + new URLSearchParams(req.query).toString()
+      : '';
+    const response = await fetch(`${AWS_API_URL}/api/artifacts${queryString}`, {
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Artifacts] Error listing artifacts:', error.message);
+    res.json({ artifacts: [] });
+  }
+});
+
+// Get artifact content - proxy to AWS API
+app.get('/api/artifacts/:artifactId/content', async (req, res) => {
+  try {
+    const queryString = Object.keys(req.query).length > 0
+      ? '?' + new URLSearchParams(req.query).toString()
+      : '';
+    const response = await fetch(`${AWS_API_URL}/api/artifacts/${req.params.artifactId}/content${queryString}`, {
+      headers: {
+        'Cookie': req.headers.cookie || '',
+        'X-User-Id': req.headers['x-user-id'] || 'demo-user'
+      }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Artifacts] Error getting artifact content:', error.message);
+    res.status(500).json({ error: 'Failed to get artifact content' });
+  }
 });
 
 // =============================================================================

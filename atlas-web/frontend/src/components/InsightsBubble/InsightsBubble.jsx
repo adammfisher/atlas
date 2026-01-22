@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Lightbulb, X, Check, Share2, ChevronUp, ToggleLeft, ToggleRight, Trash2, FileText } from 'lucide-react'
+import { Lightbulb, X, Check, Share2, ChevronUp, Trash2, FileText } from 'lucide-react'
 import { useInsightsStore } from '../../hooks/useInsightsStore'
 import { insightsService } from '../../services/insightsService'
-
-// Insights uses mock server (localhost:8000) until backend is implemented
-const INSIGHTS_API_URL = import.meta.env.VITE_INSIGHTS_API_URL || 'http://localhost:8000'
 
 // Ally brand pink color
 const ALLY_PINK = '#CD477E'
@@ -15,8 +12,6 @@ function InsightsBubble() {
   const [isOpen, setIsOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [isSharing, setIsSharing] = useState(false)
-  const [mockMode, setMockMode] = useState(true)
-  const [isTogglingMock, setIsTogglingMock] = useState(false)
 
   const {
     insights,
@@ -28,14 +23,6 @@ function InsightsBubble() {
   } = useInsightsStore()
 
   useEffect(() => {
-    // Fetch initial mock mode state - silently fail if backend not available
-    fetch(`${INSIGHTS_API_URL}/api/settings/mock-mode`)
-      .then(res => res.ok ? res.json() : null)
-      .then(data => data && setMockMode(data.mock_mode))
-      .catch(() => {}) // Silently ignore - insights backend not deployed
-  }, [])
-
-  useEffect(() => {
     // Poll for new insights periodically
     fetchInsights()
     const interval = setInterval(() => {
@@ -44,25 +31,6 @@ function InsightsBubble() {
 
     return () => clearInterval(interval)
   }, [])
-
-  const handleToggleMockMode = async () => {
-    setIsTogglingMock(true)
-    try {
-      const response = await fetch(`${INSIGHTS_API_URL}/api/settings/mock-mode`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !mockMode })
-      })
-      const data = await response.json()
-      setMockMode(data.mock_mode)
-      // Refresh insights after toggle
-      fetchInsights()
-    } catch (error) {
-      console.error('Failed to toggle mock mode:', error)
-    } finally {
-      setIsTogglingMock(false)
-    }
-  }
 
   const handleToggleSelect = (id) => {
     const newSelected = new Set(selectedIds)
@@ -186,38 +154,6 @@ function InsightsBubble() {
               style={{ color: 'var(--text-muted)' }}
             >
               <X size={18} />
-            </button>
-          </div>
-
-          {/* Mock Mode Toggle */}
-          <div
-            className="flex items-center justify-between px-4 py-2 border-b"
-            style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-tertiary)' }}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Mock Data</span>
-              {mockMode && (
-                <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">
-                  ON
-                </span>
-              )}
-              {!mockMode && (
-                <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
-                  LIVE
-                </span>
-              )}
-            </div>
-            <button
-              onClick={handleToggleMockMode}
-              disabled={isTogglingMock}
-              className="p-1 transition-colors disabled:opacity-50"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              {mockMode ? (
-                <ToggleLeft size={24} className="text-yellow-400" />
-              ) : (
-                <ToggleRight size={24} className="text-green-400" />
-              )}
             </button>
           </div>
 
