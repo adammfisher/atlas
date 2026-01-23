@@ -102,12 +102,6 @@ Reference:
 
 ---
 
-## Getting Help
 
-- **Slack**: #atlas-dev
-- **Email**: atlas-team@ally.com
-- **Issues**: [GitHub Issues](https://github.com/ally/atlas/issues)
-
----
 
 *Last updated: January 2026*
