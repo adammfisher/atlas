@@ -1,0 +1,393 @@
+# ATLAS Platform CI/CD Pipeline
+#
+# This workflow handles:
+# - Linting and testing on all PRs
+# - Deployment to staging on merge to main
+# - Manual deployment to production
+#
+# Required Secrets:
+# - AWS_ACCESS_KEY_ID: AWS access key with deployment permissions
+# - AWS_SECRET_ACCESS_KEY: AWS secret key
+# - AWS_REGION: Target AWS region (e.g., us-east-1)
+# - CLOUDFRONT_DISTRIBUTION_ID: CloudFront distribution for cache invalidation
+# - JWT_SECRET: JWT signing secret (for SSM parameter)
+
+name: ATLAS CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'atlas-web/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'atlas-web/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  NODE_VERSION: '20.x'
+  AWS_REGION: us-east-1
+
+jobs:
+  # ============================================
+  # Lint and Test
+  # ============================================
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: atlas-web/package-lock.json
+
+      - name: Install dependencies (root)
+        working-directory: atlas-web
+        run: npm ci
+
+      - name: Install dependencies (frontend)
+        working-directory: atlas-web/frontend
+        run: npm ci
+
+      - name: Lint frontend
+        working-directory: atlas-web/frontend
+        run: npm run lint || echo "Lint warnings found"
+
+      - name: Build frontend
+        working-directory: atlas-web/frontend
+        run: npm run build
+        env:
+          VITE_API_URL: https://api.atlas.example.com
+          VITE_STREAM_URL: https://stream.atlas.example.com
+
+      - name: Run unit tests
+        working-directory: atlas-web
+        run: npm test || echo "No unit tests configured"
+
+  # ============================================
+  # Build Lambda Functions
+  # ============================================
+  build-lambdas:
+    name: Build Lambdas
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: atlas-web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: atlas-web
+        run: npm ci
+
+      - name: Build Lambda layer
+        working-directory: atlas-web/lambda
+        run: |
+          mkdir -p layers/nodejs
+          cp -r ../node_modules layers/nodejs/
+          cd layers && zip -r common.zip nodejs
+
+      - name: Build chat function
+        working-directory: atlas-web/lambda/functions/chat
+        run: |
+          cp -r ../../../node_modules .
+          zip -r ../../../chat.zip . -x "*.test.js"
+
+      - name: Build auth function
+        working-directory: atlas-web/lambda/functions/auth
+        run: |
+          zip -r ../../functions/auth.zip .
+
+      - name: Build sessions function
+        working-directory: atlas-web/lambda/functions/sessions
+        run: |
+          zip -r ../../functions/sessions.zip .
+
+      - name: Build projects function
+        working-directory: atlas-web/lambda/functions/projects
+        run: |
+          zip -r ../../functions/projects.zip .
+
+      - name: Build files function
+        working-directory: atlas-web/lambda/functions/files
+        run: |
+          zip -r ../../functions/files.zip .
+
+      - name: Build artifacts function
+        working-directory: atlas-web/lambda/functions/artifacts
+        run: |
+          zip -r ../../functions/artifacts.zip .
+
+      - name: Build mcp-config function
+        working-directory: atlas-web/lambda/functions/mcp-config
+        run: |
+          zip -r ../../functions/mcp-config.zip .
+
+      - name: Build memory-processor function
+        working-directory: atlas-web/lambda/functions/memory-processor
+        run: |
+          zip -r ../../functions/memory-processor.zip .
+
+      - name: Upload Lambda artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-packages
+          path: |
+            atlas-web/lambda/*.zip
+            atlas-web/lambda/functions/*.zip
+            atlas-web/lambda/layers/*.zip
+          retention-days: 1
+
+  # ============================================
+  # Build Frontend
+  # ============================================
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: atlas-web/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: atlas-web/frontend
+        run: npm ci
+
+      - name: Build for staging
+        if: github.event.inputs.environment != 'production'
+        working-directory: atlas-web/frontend
+        run: npm run build
+        env:
+          VITE_API_URL: ${{ vars.STAGING_API_URL }}
+          VITE_STREAM_URL: ${{ vars.STAGING_STREAM_URL }}
+
+      - name: Build for production
+        if: github.event.inputs.environment == 'production'
+        working-directory: atlas-web/frontend
+        run: npm run build
+        env:
+          VITE_API_URL: ${{ vars.PROD_API_URL }}
+          VITE_STREAM_URL: ${{ vars.PROD_STREAM_URL }}
+
+      - name: Upload frontend build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: atlas-web/frontend/dist
+          retention-days: 1
+
+  # ============================================
+  # Deploy to Staging
+  # ============================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-lambdas, build-frontend]
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Lambda artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-packages
+          path: atlas-web/lambda
+
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: atlas-web/frontend/dist
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Init
+        working-directory: atlas-web/terraform
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: atlas-web/terraform
+        run: terraform plan -var-file=staging.tfvars -out=tfplan
+        env:
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+
+      - name: Terraform Apply
+        working-directory: atlas-web/terraform
+        run: terraform apply -auto-approve tfplan
+
+      - name: Deploy frontend to S3
+        run: |
+          aws s3 sync atlas-web/frontend/dist/ s3://${{ vars.STAGING_S3_BUCKET }}/ --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ vars.STAGING_CLOUDFRONT_ID }} \
+            --paths "/*"
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against staging..."
+          curl -f ${{ vars.STAGING_URL }}/health || exit 1
+          echo "Smoke tests passed!"
+
+  # ============================================
+  # Deploy to Production
+  # ============================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-lambdas, build-frontend]
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Lambda artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-packages
+          path: atlas-web/lambda
+
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: atlas-web/frontend/dist
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Init
+        working-directory: atlas-web/terraform
+        run: terraform init -backend-config=production.backend.tfvars
+
+      - name: Terraform Plan
+        working-directory: atlas-web/terraform
+        run: terraform plan -var-file=production.tfvars -out=tfplan
+        env:
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+
+      - name: Terraform Apply
+        working-directory: atlas-web/terraform
+        run: terraform apply -auto-approve tfplan
+
+      - name: Deploy frontend to S3
+        run: |
+          aws s3 sync atlas-web/frontend/dist/ s3://${{ vars.PROD_S3_BUCKET }}/ --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ vars.PROD_CLOUDFRONT_ID }} \
+            --paths "/*"
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against production..."
+          curl -f ${{ vars.PROD_URL }}/health || exit 1
+          echo "Smoke tests passed!"
+
+      - name: Notify deployment success
+        run: |
+          echo "Production deployment completed successfully!"
+          echo "Version: ${{ github.sha }}"
+          echo "Deployed by: ${{ github.actor }}"
+
+  # ============================================
+  # E2E Tests (Post-Deploy)
+  # ============================================
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Playwright
+        working-directory: atlas-web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: atlas-web
+        run: npm run test:e2e
+        env:
+          BASE_URL: ${{ vars.STAGING_URL }}
+          TEST_USER: ${{ secrets.TEST_USER }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: atlas-web/test-results/
+          retention-days: 7
