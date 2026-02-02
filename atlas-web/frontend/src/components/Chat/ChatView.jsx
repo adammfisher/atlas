@@ -614,53 +614,52 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
             // 2. The backend filters most artifact content but partial tags can leak through
             // 3. Instead, we use completedStreamingArtifacts (from artifact_complete events) to render inline cards
 
-            // If this was a new session, migrate temp session to backend session ID
+            // Handle session ID from backend response
+            // With the fix, backend should return the SAME session_id we sent
             if (isNewSession && result.session_id && tempSessionId) {
               const backendSessionId = result.session_id
-              console.log('[ChatView] Migrating session from', tempSessionId, 'to', backendSessionId)
-              const store = useChatStore.getState()
-              // Get messages from temp session
-              const tempMessages = store.messagesBySession[tempSessionId] || []
 
-              // Check if temp session still exists in store (might have been removed by Sidebar refresh)
-              const tempSessionExists = store.sessions.some(s => s.id === tempSessionId)
-              const backendSessionExists = store.sessions.some(s => s.id === backendSessionId)
+              // Only migrate if IDs are actually different (shouldn't happen with fix)
+              if (backendSessionId !== tempSessionId) {
+                console.log('[ChatView] Session ID mismatch - migrating from', tempSessionId, 'to', backendSessionId)
+                const store = useChatStore.getState()
+                const tempMessages = store.messagesBySession[tempSessionId] || []
+                const tempSessionExists = store.sessions.some(s => s.id === tempSessionId)
+                const backendSessionExists = store.sessions.some(s => s.id === backendSessionId)
 
-              let updatedSessions
-              if (tempSessionExists) {
-                // Update the temp session's ID to the backend ID
-                updatedSessions = store.sessions.map(s =>
-                  s.id === tempSessionId ? { ...s, id: backendSessionId } : s
-                )
-              } else if (!backendSessionExists) {
-                // Temp session was removed (e.g., by Sidebar refresh) - add the backend session
-                const newSession = {
-                  id: backendSessionId,
-                  title: null,
-                  starred: false,
-                  projectId: projectId || null,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
+                let updatedSessions
+                if (tempSessionExists) {
+                  updatedSessions = store.sessions.map(s =>
+                    s.id === tempSessionId ? { ...s, id: backendSessionId } : s
+                  )
+                } else if (!backendSessionExists) {
+                  const newSession = {
+                    id: backendSessionId,
+                    title: null,
+                    starred: false,
+                    projectId: projectId || null,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                  }
+                  updatedSessions = [newSession, ...store.sessions]
+                } else {
+                  updatedSessions = store.sessions
                 }
-                updatedSessions = [newSession, ...store.sessions]
-                console.log('[ChatView] Temp session was removed, adding backend session:', backendSessionId)
-              } else {
-                // Backend session already exists (shouldn't happen, but handle gracefully)
-                updatedSessions = store.sessions
-                console.log('[ChatView] Backend session already exists:', backendSessionId)
-              }
 
-              // Move messages to the new session ID and remove temp session
-              const { [tempSessionId]: _, ...restMessages } = store.messagesBySession
-              store.setSessions(updatedSessions)
-              store.setSessionMessages(backendSessionId, tempMessages)
-              store.setCurrentSession(backendSessionId)
-              // Update the ref so subsequent operations use the correct session ID
-              activeSessionRef.current = backendSessionId
-              // Navigate to the new URL
-              navigate(projectId ? `/project/${projectId}/chat/${backendSessionId}` : `/chat/${backendSessionId}`, { replace: true })
-              // Update activeSessionId for title generation
-              activeSessionId = backendSessionId
+                const { [tempSessionId]: _, ...restMessages } = store.messagesBySession
+                store.setSessions(updatedSessions)
+                store.setSessionMessages(backendSessionId, tempMessages)
+                store.setCurrentSession(backendSessionId)
+                activeSessionRef.current = backendSessionId
+                navigate(projectId ? `/project/${projectId}/chat/${backendSessionId}` : `/chat/${backendSessionId}`, { replace: true })
+                activeSessionId = backendSessionId
+              } else {
+                // Session IDs match (expected) - just update URL if needed
+                console.log('[ChatView] Session ID confirmed:', backendSessionId)
+                if (!sessionId) {
+                  navigate(projectId ? `/project/${projectId}/chat/${backendSessionId}` : `/chat/${backendSessionId}`, { replace: true })
+                }
+              }
             }
 
             // Generate title for new sessions
@@ -787,53 +786,52 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
             // 2. The backend filters most artifact content but partial tags can leak through
             // 3. Instead, we use completedStreamingArtifacts (from artifact_complete events) to render inline cards
 
-            // If this was a new session, migrate temp session to backend session ID
+            // Handle session ID from backend response
+            // With the fix, backend should return the SAME session_id we sent
             if (isNewSession && result.session_id && tempSessionId) {
               const backendSessionId = result.session_id
-              console.log('[ChatView] Migrating session from', tempSessionId, 'to', backendSessionId)
-              const store = useChatStore.getState()
-              // Get messages from temp session
-              const tempMessages = store.messagesBySession[tempSessionId] || []
 
-              // Check if temp session still exists in store (might have been removed by Sidebar refresh)
-              const tempSessionExists = store.sessions.some(s => s.id === tempSessionId)
-              const backendSessionExists = store.sessions.some(s => s.id === backendSessionId)
+              // Only migrate if IDs are actually different (shouldn't happen with fix)
+              if (backendSessionId !== tempSessionId) {
+                console.log('[ChatView] Session ID mismatch - migrating from', tempSessionId, 'to', backendSessionId)
+                const store = useChatStore.getState()
+                const tempMessages = store.messagesBySession[tempSessionId] || []
+                const tempSessionExists = store.sessions.some(s => s.id === tempSessionId)
+                const backendSessionExists = store.sessions.some(s => s.id === backendSessionId)
 
-              let updatedSessions
-              if (tempSessionExists) {
-                // Update the temp session's ID to the backend ID
-                updatedSessions = store.sessions.map(s =>
-                  s.id === tempSessionId ? { ...s, id: backendSessionId } : s
-                )
-              } else if (!backendSessionExists) {
-                // Temp session was removed (e.g., by Sidebar refresh) - add the backend session
-                const newSession = {
-                  id: backendSessionId,
-                  title: null,
-                  starred: false,
-                  projectId: projectId || null,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
+                let updatedSessions
+                if (tempSessionExists) {
+                  updatedSessions = store.sessions.map(s =>
+                    s.id === tempSessionId ? { ...s, id: backendSessionId } : s
+                  )
+                } else if (!backendSessionExists) {
+                  const newSession = {
+                    id: backendSessionId,
+                    title: null,
+                    starred: false,
+                    projectId: projectId || null,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                  }
+                  updatedSessions = [newSession, ...store.sessions]
+                } else {
+                  updatedSessions = store.sessions
                 }
-                updatedSessions = [newSession, ...store.sessions]
-                console.log('[ChatView] Temp session was removed, adding backend session:', backendSessionId)
-              } else {
-                // Backend session already exists (shouldn't happen, but handle gracefully)
-                updatedSessions = store.sessions
-                console.log('[ChatView] Backend session already exists:', backendSessionId)
-              }
 
-              // Move messages to the new session ID and remove temp session
-              const { [tempSessionId]: _, ...restMessages } = store.messagesBySession
-              store.setSessions(updatedSessions)
-              store.setSessionMessages(backendSessionId, tempMessages)
-              store.setCurrentSession(backendSessionId)
-              // Update the ref so subsequent operations use the correct session ID
-              activeSessionRef.current = backendSessionId
-              // Navigate to the new URL
-              navigate(projectId ? `/project/${projectId}/chat/${backendSessionId}` : `/chat/${backendSessionId}`, { replace: true })
-              // Update activeSessionId for title generation
-              activeSessionId = backendSessionId
+                const { [tempSessionId]: _, ...restMessages } = store.messagesBySession
+                store.setSessions(updatedSessions)
+                store.setSessionMessages(backendSessionId, tempMessages)
+                store.setCurrentSession(backendSessionId)
+                activeSessionRef.current = backendSessionId
+                navigate(projectId ? `/project/${projectId}/chat/${backendSessionId}` : `/chat/${backendSessionId}`, { replace: true })
+                activeSessionId = backendSessionId
+              } else {
+                // Session IDs match (expected) - just update URL if needed
+                console.log('[ChatView] Session ID confirmed:', backendSessionId)
+                if (!sessionId) {
+                  navigate(projectId ? `/project/${projectId}/chat/${backendSessionId}` : `/chat/${backendSessionId}`, { replace: true })
+                }
+              }
             }
 
             // Generate title for new sessions

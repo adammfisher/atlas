@@ -349,20 +349,25 @@ app.post('/api/chat/message/stream', async (req, res) => {
         }
       }
 
-      // Send done event
+      // Send done event - ALWAYS use the session_id from request to maintain context
+      // If no session_id provided, generate one (but this should rarely happen)
+      const activeSessionId = session_id || `session_${Date.now()}`;
       sendEvent({
         type: 'done',
         message_id: `msg_${Date.now()}_assistant`,
-        session_id: session_id || `session_${Date.now()}`
+        session_id: activeSessionId
       });
+      console.log('[Chat-Local] Session maintained:', activeSessionId);
 
     } catch (error) {
       console.error('[Chat-Local] Error:', error);
       sendEvent({ type: 'error', message: error.message });
+      // Use the same session_id from request even on error
+      const activeSessionId = session_id || `session_${Date.now()}`;
       sendEvent({
         type: 'done',
         message_id: `msg_${Date.now()}_assistant`,
-        session_id: session_id || `session_${Date.now()}`
+        session_id: activeSessionId
       });
     }
 

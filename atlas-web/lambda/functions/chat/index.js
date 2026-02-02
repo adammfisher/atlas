@@ -220,6 +220,9 @@ async function handleStreamingChatWithStream(userId, event, responseStream) {
   }
 
   // Get or create session
+  // IMPORTANT: If frontend sends a session_id (even a temp one), we MUST use it
+  // to maintain context continuity. The frontend creates temp sessions locally
+  // and expects the backend to persist them with the SAME ID.
   let session = null;
   let activeSessionId = sessionId;
 
@@ -231,8 +234,10 @@ async function handleStreamingChatWithStream(userId, event, responseStream) {
   }
 
   if (!session) {
-    activeSessionId = `session_${Date.now()}`;
-    console.log('Creating new session:', activeSessionId);
+    // Use the sessionId from frontend if provided, otherwise generate new one
+    // This ensures temp sessions created by frontend are persisted with same ID
+    activeSessionId = sessionId || `session_${Date.now()}`;
+    console.log('Creating new session with ID:', activeSessionId, sessionId ? '(using frontend session ID)' : '(generated new ID)');
     session = {
       userId,
       sessionId: activeSessionId,
