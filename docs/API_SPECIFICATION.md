@@ -57,7 +57,7 @@ Create a new user account.
 ```json
 {
   "username": "jsmith",
-  "email": "jsmith@ally.com",
+  "email": "jsmith@example.com",
   "password": "SecurePassword123!",
   "displayName": "John Smith"
 }
@@ -70,7 +70,7 @@ Create a new user account.
   "user": {
     "userId": "usr_abc123def456",
     "username": "jsmith",
-    "email": "jsmith@ally.com",
+    "email": "jsmith@example.com",
     "displayName": "John Smith",
     "role": "user"
   }
@@ -146,7 +146,7 @@ Get current authenticated user.
   "userId": "usr_abc123def456",
   "username": "jsmith",
   "displayName": "John Smith",
-  "email": "jsmith@ally.com",
+  "email": "jsmith@example.com",
   "role": "user"
 }
 ```

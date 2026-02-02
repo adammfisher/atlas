@@ -306,7 +306,7 @@ print_status() {
 
     echo ""
     echo -e "${YELLOW}Credentials:${NC}"
-    echo "  Neo4j: neo4j / allyfinancial"
+    echo "  Neo4j: neo4j / localdev123"
     echo "  Code Server: demo123"
     echo ""
     echo -e "${YELLOW}Logs:${NC}"

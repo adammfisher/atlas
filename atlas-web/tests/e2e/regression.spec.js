@@ -269,7 +269,7 @@ test.describe('REGRESSION TEST SUITE', () => {
     });
 
     test('R-UI-02: User profile is displayed', async ({ authenticatedPage }) => {
-      const userProfile = authenticatedPage.locator('button:has-text("Adam"), button:has-text("Ally ID")');
+      const userProfile = authenticatedPage.locator('button:has-text("Adam"), button:has-text("User")');
       await expect(userProfile).toBeVisible();
     });
   });

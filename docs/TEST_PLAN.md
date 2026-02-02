@@ -97,8 +97,8 @@ This document defines the testing strategy, test cases, and quality standards fo
 |-------------|---------|------|-----|
 | Local | Development | Mock/seed | localhost:3000 |
 | CI | Automated tests | Ephemeral | CI containers |
-| Staging | Pre-production | Sanitized prod | staging.atlas.ally.com |
-| Production | Live | Real | atlas.ally.com |
+| Staging | Pre-production | Sanitized prod | staging.atlas.example.com |
+| Production | Live | Real | atlas.example.com |
 
 ### 3.2 Environment Setup
 
@@ -635,7 +635,7 @@ Expected: No passwords, keys, or internal info
 ```bash
 # Automated security scan
 docker run -t owasp/zap2docker-stable zap-baseline.py \
-  -t https://staging.atlas.ally.com \
+  -t https://staging.atlas.example.com \
   -r zap-report.html
 ```
 

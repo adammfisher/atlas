@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import { ChevronDown, ChevronRight, Globe, Loader2, Brain, Image, FileText, Database, BookOpen, Eye, Archive } from 'lucide-react'
 
-// Ally brand pink color
-const ALLY_PINK = '#CD477E'
+// Atlas brand orange color
+const ATLAS_ORANGE = '#E07020'
 const KNOWLEDGE_COLOR = '#4CAF50' // Green for knowledge context
 const COMPACTION_COLOR = '#FF9800' // Orange for compaction notification
 
@@ -68,12 +68,12 @@ function ThinkingSteps({ steps, onViewArtifact }) {
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[hsl(30,3.3%,18%)] transition-colors"
       >
-        <Brain size={14} style={{ color: ALLY_PINK }} />
+        <Brain size={14} style={{ color: ATLAS_ORANGE }} />
         <span className="text-[13px] flex-1 text-left" style={{ color: 'hsl(48, 4.8%, 59.2%)' }}>
           {getSummaryText()}
         </span>
         {(isSearching || isProcessing) && (
-          <Loader2 size={14} className="animate-spin" style={{ color: ALLY_PINK }} />
+          <Loader2 size={14} className="animate-spin" style={{ color: ATLAS_ORANGE }} />
         )}
         {isExpanded ? (
           <ChevronDown size={14} style={{ color: 'hsl(48, 4.8%, 59.2%)' }} />
@@ -89,7 +89,7 @@ function ThinkingSteps({ steps, onViewArtifact }) {
             <div key={index}>
               {step.type === 'processing' && (
                 <div className="flex items-center gap-2">
-                  <Image size={14} style={{ color: ALLY_PINK }} />
+                  <Image size={14} style={{ color: ATLAS_ORANGE }} />
                   <span className="text-[13px]" style={{ color: 'hsl(48, 33.3%, 97.1%)' }}>
                     {step.message}
                   </span>

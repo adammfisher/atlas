@@ -28,8 +28,8 @@ const capitalizeFirst = (str) => {
   return str.charAt(0).toUpperCase() + str.slice(1)
 }
 
-// Ally Atlas Logo SVG Component
-function AllyLogo({ className = "" }) {
+// Atlas Logo SVG Component
+function AtlasLogo({ className = "" }) {
   return (
 
 
@@ -247,10 +247,10 @@ function Sidebar() {
         borderOpacity: 'var(--border-opacity)'
       }}
     >
-      {/* Header with Ally logo and search */}
+      {/* Header with Atlas logo and search */}
       <div className="p-3 flex flex-col items-center">
         <div className="w-full flex items-center justify-center mb-2">
-          <AllyLogo />
+          <AtlasLogo />
         </div>
         <button
           onClick={() => setShowSearch(!showSearch)}

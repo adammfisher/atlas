@@ -5,7 +5,7 @@ const LOADING_PHRASES = [
   "Accomplishing",
   "Actioning",
   "Actualizing",
-  "Ally-ifying",
+  "Atlas-ifying",
   "Baking",
   "Brewing",
   "Calculating",

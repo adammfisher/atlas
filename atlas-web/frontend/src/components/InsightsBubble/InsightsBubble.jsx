@@ -3,10 +3,10 @@ import { Lightbulb, X, Check, Share2, ChevronUp, Trash2, FileText } from 'lucide
 import { useInsightsStore } from '../../hooks/useInsightsStore'
 import { insightsService } from '../../services/insightsService'
 
-// Ally brand pink color
-const ALLY_PINK = '#CD477E'
-const ALLY_PINK_HOVER = '#D85A8E'
-const ALLY_PINK_DARK = '#A33A65'
+// Atlas brand orange color
+const ATLAS_ORANGE = '#E07020'
+const ATLAS_ORANGE_HOVER = '#F08030'
+const ATLAS_ORANGE_DARK = '#C06018'
 
 function InsightsBubble() {
   const [isOpen, setIsOpen] = useState(false)
@@ -104,17 +104,17 @@ function InsightsBubble() {
         onClick={() => setIsOpen(!isOpen)}
         className="fixed bottom-6 right-6 flex items-center gap-2 px-4 py-3 rounded-full shadow-lg transition-all border"
         style={pendingCount > 0 ? {
-          backgroundColor: ALLY_PINK,
-          borderColor: ALLY_PINK
+          backgroundColor: ATLAS_ORANGE,
+          borderColor: ATLAS_ORANGE
         } : {
           backgroundColor: 'var(--bg-secondary)',
           borderColor: 'var(--border-color)'
         }}
         onMouseEnter={(e) => {
-          if (pendingCount > 0) e.currentTarget.style.backgroundColor = ALLY_PINK_HOVER
+          if (pendingCount > 0) e.currentTarget.style.backgroundColor = ATLAS_ORANGE_HOVER
         }}
         onMouseLeave={(e) => {
-          if (pendingCount > 0) e.currentTarget.style.backgroundColor = ALLY_PINK
+          if (pendingCount > 0) e.currentTarget.style.backgroundColor = ATLAS_ORANGE
         }}
       >
         <Lightbulb size={20} className={pendingCount > 0 ? 'text-yellow-300' : ''} style={pendingCount > 0 ? {} : { color: 'var(--text-muted)' }} />
@@ -217,13 +217,13 @@ function InsightsBubble() {
                 disabled={isSharing}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 text-white rounded-lg transition-colors"
                 style={{
-                  backgroundColor: isSharing ? ALLY_PINK_DARK : ALLY_PINK
+                  backgroundColor: isSharing ? ATLAS_ORANGE_DARK : ATLAS_ORANGE
                 }}
                 onMouseEnter={(e) => {
-                  if (!isSharing) e.currentTarget.style.backgroundColor = ALLY_PINK_HOVER
+                  if (!isSharing) e.currentTarget.style.backgroundColor = ATLAS_ORANGE_HOVER
                 }}
                 onMouseLeave={(e) => {
-                  if (!isSharing) e.currentTarget.style.backgroundColor = ALLY_PINK
+                  if (!isSharing) e.currentTarget.style.backgroundColor = ATLAS_ORANGE
                 }}
               >
                 <Share2 size={16} />
@@ -267,7 +267,7 @@ function InsightCard({ insight, isSelected, onToggle, isShared, onRemoveFromKC, 
       className="p-3 rounded-lg border transition-colors cursor-pointer"
       style={isSelected ? {
         backgroundColor: 'rgba(205, 71, 126, 0.2)',
-        borderColor: ALLY_PINK
+        borderColor: ATLAS_ORANGE
       } : {
         backgroundColor: 'var(--bg-tertiary)',
         borderColor: 'var(--border-color)'
@@ -279,8 +279,8 @@ function InsightCard({ insight, isSelected, onToggle, isShared, onRemoveFromKC, 
           <div
             className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5"
             style={isSelected ? {
-              backgroundColor: ALLY_PINK,
-              borderColor: ALLY_PINK
+              backgroundColor: ATLAS_ORANGE,
+              borderColor: ATLAS_ORANGE
             } : {
               borderColor: 'var(--text-muted)'
             }}

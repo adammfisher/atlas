@@ -35,7 +35,7 @@ Welcome to the ATLAS platform! This guide will help you set up your development 
 ### 1.2 Clone the Repository
 
 ```bash
-git clone https://github.com/ally/atlas.git
+git clone https://github.com/your-org/atlas.git
 cd atlas
 ```
 
@@ -49,7 +49,7 @@ cd atlas
 # - Frontend: http://localhost:3000
 # - Backend API: http://localhost:8000
 # - VS Code (demo): http://localhost:8080 (password: demo123)
-# - Neo4j Browser: http://localhost:7474 (neo4j/allyfinancial)
+# - Neo4j Browser: http://localhost:7474 (neo4j/localdev123)
 ```
 
 ### 1.4 Stop Development Environment
@@ -644,7 +644,7 @@ docker-compose up -d
 docker logs ally-neo4j --tail 50
 
 # Reinitialize data
-docker exec -i ally-neo4j cypher-shell -u neo4j -p allyfinancial < data/neo4j-init.cypher
+docker exec -i atlas-neo4j cypher-shell -u neo4j -p localdev123 < data/neo4j-init.cypher
 ```
 
 **Frontend build fails:**
@@ -688,7 +688,7 @@ aws logs tail /aws/lambda/atlas-chat --follow
 cd terraform && terraform state list
 
 # Database queries (Neo4j)
-docker exec -it ally-neo4j cypher-shell -u neo4j -p allyfinancial
+docker exec -it atlas-neo4j cypher-shell -u neo4j -p localdev123
 ```
 
 ---
@@ -696,7 +696,7 @@ docker exec -it ally-neo4j cypher-shell -u neo4j -p allyfinancial
 ## Questions?
 
 - **Slack:** #atlas-dev
-- **Email:** atlas-team@ally.com
+- **Email:** atlas-team@example.com
 - **Wiki:** [Internal Wiki Link]
 
 Thank you for contributing to ATLAS!

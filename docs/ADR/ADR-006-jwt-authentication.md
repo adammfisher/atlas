@@ -150,7 +150,7 @@ Enterprise identity provider integration.
 - Significant integration complexity
 - Dependency on enterprise IdP availability
 - Not needed for initial deployment
-- Can be added as future enhancement (Ally SSO)
+- Can be added as future enhancement (Enterprise SSO)
 
 ### Alternative 4: API Keys
 
@@ -165,7 +165,7 @@ Static API keys per user for authentication.
 ## Future Considerations
 
 1. **Token refresh**: Add refresh token flow to extend sessions without re-login
-2. **Ally SSO integration**: SAML/OIDC integration with corporate IdP
+2. **Enterprise SSO integration**: SAML/OIDC integration with corporate IdP
 3. **MFA**: Add TOTP or WebAuthn for sensitive operations
 4. **Role-based access**: Expand role system beyond user/admin
 5. **Session management**: Allow users to view/revoke active sessions

@@ -226,7 +226,7 @@ User ──► Token ──► Lambda ──► Check userId ──► Access Da
 // Masking in logs
 SSN: ***-**-1234
 Card: ****-****-****-1234
-Email: j***@ally.com
+Email: j***@example.com
 ```
 
 **Secret Management:**
@@ -295,7 +295,7 @@ Email: j***@ally.com
 ```javascript
 // API Gateway CORS
 {
-  allow_origins: ["https://atlas.ally.com", "http://localhost:3000"],
+  allow_origins: ["https://atlas.example.com", "http://localhost:3000"],
   allow_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allow_headers: ["Content-Type", "Authorization", "X-User-Id", "Cookie"],
   allow_credentials: true,
@@ -304,7 +304,7 @@ Email: j***@ally.com
 
 // Lambda Function URL CORS
 {
-  allow_origins: ["https://atlas.ally.com", "http://localhost:3000"],
+  allow_origins: ["https://atlas.example.com", "http://localhost:3000"],
   allow_methods: ["*"],
   allow_headers: ["content-type", "authorization", "x-user-id"],
   allow_credentials: true,
@@ -329,8 +329,8 @@ Email: j***@ally.com
   "Scope": "CLOUDFRONT",
   "IPAddressVersion": "IPV4",
   "Addresses": [
-    "10.0.0.0/8",      // Ally internal
-    "172.16.0.0/12"    // Ally VPN
+    "10.0.0.0/8",      // Internal network
+    "172.16.0.0/12"    // VPN network
   ]
 }
 ```
@@ -634,7 +634,7 @@ User Input → Chat Lambda → Bedrock
 
 | Role | Contact |
 |------|---------|
-| Security Lead | security@ally.com |
+| Security Lead | security@example.com |
 | On-Call | PagerDuty: ATLAS-Security |
 | AWS Support | AWS Support Console |
 
@@ -709,11 +709,11 @@ aws cloudtrail lookup-events \
 
 ```bash
 # OWASP ZAP scan
-docker run -t owasp/zap2docker-stable zap-baseline.py -t https://atlas.ally.com
+docker run -t owasp/zap2docker-stable zap-baseline.py -t https://atlas.example.com
 
 # SSL/TLS check
-testssl.sh https://atlas.ally.com
+testssl.sh https://atlas.example.com
 
 # Security headers check
-curl -I https://atlas.ally.com | grep -E '^(X-|Content-Security|Strict)'
+curl -I https://atlas.example.com | grep -E '^(X-|Content-Security|Strict)'
 ```

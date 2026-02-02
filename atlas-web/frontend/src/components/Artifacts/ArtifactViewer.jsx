@@ -11,7 +11,7 @@ import {
   SlideRenderer
 } from './renderers'
 
-const ALLY_PINK = '#CD477E'
+const ATLAS_ORANGE = '#E07020'
 
 function ArtifactViewer({ artifact, content, onClose, onDownload, onShare }) {
   const [activeTab, setActiveTab] = useState('preview')
@@ -74,7 +74,7 @@ function ArtifactViewer({ artifact, content, onClose, onDownload, onShare }) {
     if (isLoading) {
       return (
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ALLY_PINK }} />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ATLAS_ORANGE }} />
         </div>
       )
     }
@@ -301,7 +301,7 @@ function ArtifactViewer({ artifact, content, onClose, onDownload, onShare }) {
                 activeTab === 'preview' ? 'border-b-2' : ''
               }`}
               style={{
-                borderColor: activeTab === 'preview' ? ALLY_PINK : 'transparent',
+                borderColor: activeTab === 'preview' ? ATLAS_ORANGE : 'transparent',
                 color: activeTab === 'preview' ? 'var(--text-primary)' : 'var(--text-muted)'
               }}
               onClick={() => setActiveTab('preview')}
@@ -314,7 +314,7 @@ function ArtifactViewer({ artifact, content, onClose, onDownload, onShare }) {
                 activeTab === 'source' ? 'border-b-2' : ''
               }`}
               style={{
-                borderColor: activeTab === 'source' ? ALLY_PINK : 'transparent',
+                borderColor: activeTab === 'source' ? ATLAS_ORANGE : 'transparent',
                 color: activeTab === 'source' ? 'var(--text-primary)' : 'var(--text-muted)'
               }}
               onClick={() => setActiveTab('source')}

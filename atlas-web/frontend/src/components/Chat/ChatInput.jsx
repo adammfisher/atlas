@@ -6,8 +6,8 @@ import ModelSelector from './ModelSelector'
 import FilePreview from './FilePreview'
 import { useChatStore } from '../../hooks/useChatStore'
 
-// Ally brand pink color
-const ALLY_PINK = '#CD477E'
+// Atlas brand orange color
+const ATLAS_ORANGE = '#E07020'
 
 function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
   const [input, setInput] = useState('')
@@ -251,10 +251,10 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
               onClick={() => setExtendedThinkingEnabled(!extendedThinkingEnabled)}
               className={`p-2 rounded-lg transition-colors ${
                 extendedThinkingEnabled
-                  ? 'bg-[#CD477E]/20 hover:bg-[#CD477E]/30'
+                  ? 'bg-[#E07020]/20 hover:bg-[#E07020]/30'
                   : ''
               }`}
-              style={{ color: extendedThinkingEnabled ? ALLY_PINK : 'var(--text-muted)' }}
+              style={{ color: extendedThinkingEnabled ? ATLAS_ORANGE : 'var(--text-muted)' }}
               onMouseEnter={(e) => !extendedThinkingEnabled && (e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)')}
               onMouseLeave={(e) => !extendedThinkingEnabled && (e.currentTarget.style.backgroundColor = 'transparent')}
               title={extendedThinkingEnabled ? "Extended thinking enabled" : "Enable extended thinking"}
@@ -265,10 +265,10 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
               onClick={() => setKnowledgeCoreEnabled(!knowledgeCoreEnabled)}
               className={`p-2 rounded-lg transition-colors ${
                 knowledgeCoreEnabled
-                  ? 'bg-[#CD477E]/20 hover:bg-[#CD477E]/30'
+                  ? 'bg-[#E07020]/20 hover:bg-[#E07020]/30'
                   : ''
               }`}
-              style={{ color: knowledgeCoreEnabled ? ALLY_PINK : 'var(--text-muted)' }}
+              style={{ color: knowledgeCoreEnabled ? ATLAS_ORANGE : 'var(--text-muted)' }}
               onMouseEnter={(e) => !knowledgeCoreEnabled && (e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)')}
               onMouseLeave={(e) => !knowledgeCoreEnabled && (e.currentTarget.style.backgroundColor = 'transparent')}
               title={knowledgeCoreEnabled ? "Knowledge Core enabled - click to disable" : "Enable Knowledge Core search"}
@@ -295,7 +295,7 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
               disabled={!canSend}
               className="p-2 rounded-full transition-colors"
               style={{
-                backgroundColor: canSend ? ALLY_PINK : 'var(--bg-tertiary)',
+                backgroundColor: canSend ? ATLAS_ORANGE : 'var(--bg-tertiary)',
                 color: canSend ? 'white' : 'var(--text-muted)',
                 cursor: canSend ? 'pointer' : 'not-allowed'
               }}

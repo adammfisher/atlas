@@ -98,7 +98,7 @@ const MCP_URL = 'http://localhost:3001';
 // Neo4j direct connection (for when MCP server isn't running)
 const NEO4J_URI = 'bolt://localhost:7687';
 const NEO4J_USER = 'neo4j';
-const NEO4J_PASSWORD = 'allyfinancial';
+const NEO4J_PASSWORD = 'localdev123';
 let neo4jDriver = null;
 
 // Initialize Neo4j driver
@@ -145,7 +145,7 @@ async function writeArtifactToNeo4j(artifact) {
         content_summary: artifact.content_summary || '',
         author_id: artifact.author?.id || 'adam-fisher',
         author_name: artifact.author?.name || 'Adam Fisher',
-        author_email: artifact.author?.email || 'adam.fisher@ally.com',
+        author_email: artifact.author?.email || 'demo@example.com',
         author_team: artifact.author?.team || 'Platform Engineering'
       }
     );
@@ -1483,7 +1483,7 @@ app.post('/api/insights/:id/share', async (req, res) => {
     author: {
       id: 'demo-user',
       name: 'Demo User',
-      email: 'demo@ally.com',
+      email: 'demo@example.com',
       team: 'Platform Engineering'
     }
   };

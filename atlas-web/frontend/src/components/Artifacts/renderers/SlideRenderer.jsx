@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Maximize2, Grid } from 'lucide-react'
 
-const ALLY_PINK = '#CD477E'
+const ATLAS_ORANGE = '#E07020'
 
 function SlideRenderer({ content }) {
   const [currentSlide, setCurrentSlide] = useState(0)
@@ -120,7 +120,7 @@ function SlideRenderer({ content }) {
           p { font-size: 1.25rem; line-height: 1.6; text-align: center; max-width: 80%; }
           ul, ol { font-size: 1.25rem; line-height: 1.8; text-align: left; }
           li { margin-bottom: 0.5rem; }
-          .highlight { color: ${ALLY_PINK}; }
+          .highlight { color: ${ATLAS_ORANGE}; }
           img { max-width: 100%; max-height: 60vh; object-fit: contain; }
           ${slide.styles}
         </style>
@@ -145,7 +145,7 @@ function SlideRenderer({ content }) {
           <button
             onClick={() => setShowOverview(false)}
             className="px-3 py-1.5 rounded-lg text-sm transition-colors"
-            style={{ backgroundColor: ALLY_PINK, color: 'white' }}
+            style={{ backgroundColor: ATLAS_ORANGE, color: 'white' }}
           >
             Close Overview
           </button>
@@ -161,8 +161,8 @@ function SlideRenderer({ content }) {
                 index === currentSlide ? 'ring-2 ring-offset-2' : ''
               }`}
               style={{
-                borderColor: index === currentSlide ? ALLY_PINK : 'var(--border-color)',
-                ringColor: ALLY_PINK
+                borderColor: index === currentSlide ? ATLAS_ORANGE : 'var(--border-color)',
+                ringColor: ATLAS_ORANGE
               }}
             >
               <iframe
@@ -221,7 +221,7 @@ function SlideRenderer({ content }) {
                 onClick={() => goToSlide(index)}
                 className="w-2.5 h-2.5 rounded-full transition-all"
                 style={{
-                  backgroundColor: index === currentSlide ? ALLY_PINK : 'var(--text-muted)',
+                  backgroundColor: index === currentSlide ? ATLAS_ORANGE : 'var(--text-muted)',
                   transform: index === currentSlide ? 'scale(1.2)' : 'scale(1)'
                 }}
                 title={`Go to slide ${index + 1}`}

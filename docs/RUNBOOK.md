@@ -37,9 +37,9 @@ ATLAS is an enterprise AI development platform providing Claude-powered coding a
 
 | Service | URL | Health Check |
 |---------|-----|--------------|
-| Frontend | https://atlas.ally.com | GET / (200) |
-| API | https://api.atlas.ally.com | GET /health (200) |
-| Streaming | https://stream.atlas.ally.com | N/A (Lambda URL) |
+| Frontend | https://atlas.example.com | GET / (200) |
+| API | https://api.atlas.example.com | GET /health (200) |
+| Streaming | https://stream.atlas.example.com | N/A (Lambda URL) |
 
 ### 1.3 Dependencies
 
@@ -314,7 +314,7 @@ aws logs filter-log-events \
 ### 5.1 Standard Deployment (CI/CD)
 
 1. **Merge to main** triggers automatic staging deployment
-2. **Verify staging** at https://staging.atlas.ally.com
+2. **Verify staging** at https://staging.atlas.example.com
 3. **Run E2E tests** (automatic)
 4. **Manual approval** for production
 5. **Trigger production** via GitHub Actions workflow_dispatch
@@ -342,7 +342,7 @@ aws cloudfront create-invalidation \
   --paths "/*"
 
 # 5. Verify deployment
-curl -f https://atlas.ally.com/health
+curl -f https://atlas.example.com/health
 ```
 
 ### 5.3 Lambda-Only Deployment
@@ -474,7 +474,7 @@ aws dynamodb scan --table-name atlas-sessions-restored --limit 10
 
 3. **Verify services** in DR region
    ```bash
-   curl -f https://dr.atlas.ally.com/health
+   curl -f https://dr.atlas.example.com/health
    ```
 
 4. **Notify stakeholders** via PagerDuty

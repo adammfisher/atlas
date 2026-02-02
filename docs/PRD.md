@@ -9,11 +9,11 @@
 
 ## 1. Executive Summary
 
-ATLAS (Ally Technology Language Assistance System) is an enterprise AI development platform that provides Ally Financial developers with AI-assisted coding capabilities powered by Claude. The platform combines interactive coding assistance with automated background agents, all unified through a Knowledge Core that understands enterprise architecture, team patterns, compliance requirements, and service dependencies.
+ATLAS (AI Technology Language Assistance System) is an enterprise AI development platform that provides developers with AI-assisted coding capabilities powered by Claude. The platform combines interactive coding assistance with automated background agents, all unified through a Knowledge Core that understands enterprise architecture, team patterns, compliance requirements, and service dependencies.
 
 ### 1.1 Vision Statement
 
-Enable every Ally developer to write better, more compliant code faster by providing AI assistance that understands enterprise context, team standards, and regulatory requirements.
+Enable every developer to write better, more compliant code faster by providing AI assistance that understands enterprise context, team standards, and regulatory requirements.
 
 ### 1.2 Key Value Propositions
 
@@ -38,7 +38,7 @@ Enable every Ally developer to write better, more compliant code faster by provi
 
 4. **Code Review Bottlenecks**: Senior developers spend excessive time on routine reviews catching compliance and pattern violations.
 
-5. **Tool Fragmentation**: Developers use multiple disconnected AI tools without enterprise context, leading to code that doesn't fit Ally's architecture.
+5. **Tool Fragmentation**: Developers use multiple disconnected AI tools without enterprise context, leading to code that doesn't fit the organization's architecture.
 
 ### 2.2 Target Outcomes
 
@@ -57,7 +57,7 @@ Enable every Ally developer to write better, more compliant code faster by provi
 
 **Name:** Sarah, Senior Software Engineer
 **Team:** Consumer Lending Engineering
-**Experience:** 5 years at Ally, 10 years total
+**Experience:** 5 years at company, 10 years total
 
 **Goals:**
 - Write compliant code without memorizing regulations
@@ -78,10 +78,10 @@ Enable every Ally developer to write better, more compliant code faster by provi
 
 **Name:** Marcus, Junior Developer
 **Team:** Platform Engineering
-**Experience:** 6 months at Ally, 2 years total
+**Experience:** 6 months at company, 2 years total
 
 **Goals:**
-- Understand Ally's architecture quickly
+- Understand the organization's architecture quickly
 - Contribute meaningful code without constant hand-holding
 - Learn team conventions by example
 
@@ -99,7 +99,7 @@ Enable every Ally developer to write better, more compliant code faster by provi
 
 **Name:** Priya, Engineering Manager
 **Team:** Credit Services
-**Experience:** 8 years at Ally
+**Experience:** 8 years at company
 
 **Goals:**
 - Ensure team output is consistent and compliant
@@ -675,7 +675,7 @@ Acceptance Criteria:
 
 | Term | Definition |
 |------|------------|
-| **ATLAS** | Ally Technology Language Assistance System |
+| **ATLAS** | AI Technology Language Assistance System |
 | **Knowledge Core** | Graph database of enterprise context |
 | **MCP** | Model Context Protocol - standard for AI tool integration |
 | **Sub-agent** | Specialized AI behavior loaded via system prompt |

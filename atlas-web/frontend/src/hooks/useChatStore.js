@@ -356,7 +356,7 @@ export const useChatStore = create(
       },
     }),
     {
-      name: 'ally-chat-store',
+      name: 'atlas-chat-store',
       version: 1,
       partialize: (state) => ({
         sessions: state.sessions,

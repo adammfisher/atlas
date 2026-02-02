@@ -9,7 +9,7 @@
       // Apply color mode before React loads to prevent flash
       (function() {
         try {
-          var stored = localStorage.getItem('ally-chat-store');
+          var stored = localStorage.getItem('atlas-chat-store');
           if (stored) {
             var data = JSON.parse(stored);
             var colorMode = data.state && data.state.colorMode;

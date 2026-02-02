@@ -85,7 +85,7 @@ test.describe('Authentication', () => {
 
     test('AUTH-006: should logout successfully', async ({ authenticatedPage }) => {
       // Find and click user profile button (at bottom of sidebar)
-      const userButton = authenticatedPage.locator('button').filter({ hasText: /Test User|Adam|Ally ID/i }).first();
+      const userButton = authenticatedPage.locator('button').filter({ hasText: /Test User|Adam|User/i }).first();
       await userButton.click();
 
       // Click logout option
@@ -102,7 +102,7 @@ test.describe('Authentication', () => {
   test.describe('User Profile', () => {
     test('AUTH-007: should display user information', async ({ authenticatedPage }) => {
       // User info should be visible in sidebar - look for any user button
-      const userInfo = authenticatedPage.locator('button').filter({ hasText: /Test User|Adam|Ally ID/i }).first();
+      const userInfo = authenticatedPage.locator('button').filter({ hasText: /Test User|Adam|User/i }).first();
       await expect(userInfo).toBeVisible();
     });
   });

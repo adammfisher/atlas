@@ -128,7 +128,7 @@ Stores user account information.
 {
   "userId": "usr_abc123def456",
   "username": "jsmith",
-  "email": "jsmith@ally.com",
+  "email": "jsmith@example.com",
   "passwordHash": "$2b$12$LQv3c1yqBWV...",
   "displayName": "John Smith",
   "role": "user",

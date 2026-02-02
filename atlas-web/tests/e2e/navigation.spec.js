@@ -39,7 +39,7 @@ test.describe('Navigation & Layout', () => {
     });
 
     test('should display user profile', async ({ authenticatedPage }) => {
-      const userProfile = authenticatedPage.locator('button:has-text("Adam"), [class*="user"], button:has-text("Ally ID")');
+      const userProfile = authenticatedPage.locator('button:has-text("Adam"), [class*="user"], button:has-text("User")');
       await expect(userProfile).toBeVisible();
     });
   });

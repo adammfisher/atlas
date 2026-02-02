@@ -12,7 +12,7 @@ import {
   SlideRenderer
 } from './renderers'
 
-const ALLY_PINK = '#CD477E'
+const ATLAS_ORANGE = '#E07020'
 const MIN_PANEL_WIDTH = 400 // Minimum panel width in pixels
 const MAX_PANEL_WIDTH_PERCENT = 70 // Maximum 70% of screen
 
@@ -272,7 +272,7 @@ function ArtifactsListPage() {
     if (isLoadingContent) {
       return (
         <div className="flex items-center justify-center h-full">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ALLY_PINK }} />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ATLAS_ORANGE }} />
         </div>
       )
     }
@@ -354,7 +354,7 @@ function ArtifactsListPage() {
           {/* Artifacts Table */}
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ALLY_PINK }} />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ATLAS_ORANGE }} />
             </div>
           ) : filteredArtifacts.length === 0 ? (
             <div className="text-center py-12">
@@ -393,7 +393,7 @@ function ArtifactsListPage() {
                             className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                             style={{ backgroundColor: 'var(--bg-tertiary)' }}
                           >
-                            <Code size={16} style={{ color: ALLY_PINK }} />
+                            <Code size={16} style={{ color: ATLAS_ORANGE }} />
                           </div>
                           <div className="min-w-0">
                             <div className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
@@ -440,7 +440,7 @@ function ArtifactsListPage() {
                           <button
                             onClick={(e) => { e.stopPropagation(); handleView(artifact) }}
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium transition-colors hover:bg-[var(--bg-tertiary)]"
-                            style={{ color: ALLY_PINK }}
+                            style={{ color: ATLAS_ORANGE }}
                           >
                             <Eye size={14} />
                             <span className="hidden sm:inline">View</span>
@@ -482,12 +482,12 @@ function ArtifactsListPage() {
             {/* Visible line - subtle when not dragging */}
             <div
               className="absolute left-0 top-0 bottom-0 w-1"
-              style={{ backgroundColor: isDragging ? ALLY_PINK : 'transparent' }}
+              style={{ backgroundColor: isDragging ? ATLAS_ORANGE : 'transparent' }}
             />
             {/* Hover highlight */}
             <div
               className="absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover:opacity-100"
-              style={{ backgroundColor: ALLY_PINK }}
+              style={{ backgroundColor: ATLAS_ORANGE }}
             />
           </div>
 

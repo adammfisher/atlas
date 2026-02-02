@@ -12,7 +12,7 @@ import {
   SlideRenderer
 } from './renderers'
 
-const ALLY_PINK = '#CD477E'
+const ATLAS_ORANGE = '#E07020'
 const MIN_WIDTH = 380
 const MAX_WIDTH_PERCENT = 80 // Maximum 80% of screen width
 const DEFAULT_WIDTH_PERCENT = 50 // Initial width: 50% of screen
@@ -398,7 +398,7 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
       console.log('[ArtifactsPanel] Showing loading spinner (backend fetch)')
       return (
         <div className="flex items-center justify-center h-full">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ALLY_PINK }} />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ATLAS_ORANGE }} />
         </div>
       )
     }
@@ -417,7 +417,7 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
       console.log('[ArtifactsPanel] Showing "Generating content..." spinner')
       return (
         <div className="flex flex-col items-center justify-center h-full gap-3" style={{ color: 'var(--text-muted)' }}>
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ALLY_PINK }} />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: ATLAS_ORANGE }} />
           <p>Generating content...</p>
         </div>
       )
@@ -474,7 +474,7 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
       {/* Header */}
       <div className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: 'var(--border-color)' }}>
         <div className="flex items-center gap-2">
-          <FileCode size={18} style={{ color: ALLY_PINK }} />
+          <FileCode size={18} style={{ color: ATLAS_ORANGE }} />
           <h2 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Artifacts</h2>
           <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
             {artifacts.length}
@@ -531,7 +531,7 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
                         className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                         style={{ backgroundColor: 'var(--bg-tertiary)' }}
                       >
-                        <Code size={14} style={{ color: ALLY_PINK }} />
+                        <Code size={14} style={{ color: ATLAS_ORANGE }} />
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
@@ -576,7 +576,7 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
                       <button
                         onClick={(e) => { e.stopPropagation(); handleView(artifact) }}
                         className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors hover:bg-[var(--bg-tertiary)]"
-                        style={{ color: ALLY_PINK }}
+                        style={{ color: ATLAS_ORANGE }}
                       >
                         <Eye size={14} />
                         <span className="hidden sm:inline">View</span>
@@ -750,7 +750,7 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
       <div
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize group flex items-center justify-center z-10"
         onMouseDown={handleDragStart}
-        style={{ backgroundColor: isDragging ? ALLY_PINK : 'transparent' }}
+        style={{ backgroundColor: isDragging ? ATLAS_ORANGE : 'transparent' }}
       >
         {/* Visible grip indicator */}
         <div
@@ -762,7 +762,7 @@ function ArtifactsPanel({ sessionId, projectId, artifacts: propArtifacts = [], i
         {/* Hover highlight bar */}
         <div
           className="absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ backgroundColor: ALLY_PINK }}
+          style={{ backgroundColor: ATLAS_ORANGE }}
         />
       </div>
 
