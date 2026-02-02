@@ -305,7 +305,7 @@ function ProjectDetailView() {
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)' }}>
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#CD477E]" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E07020]" />
       </div>
     )
   }
@@ -414,7 +414,7 @@ function ProjectDetailView() {
                   onClick={handleStartChat}
                   disabled={!chatInput.trim()}
                   className={`p-2 rounded-full transition-colors ${
-                    chatInput.trim() ? 'bg-[#CD477E] text-white' : 'bg-[var(--bg-tertiary)]'
+                    chatInput.trim() ? 'bg-[#E07020] text-white' : 'bg-[var(--bg-tertiary)]'
                   }`}
                   style={{ color: chatInput.trim() ? 'white' : 'var(--text-muted)' }}
                 >
@@ -433,7 +433,7 @@ function ProjectDetailView() {
                 </p>
                 <Link
                   to={`/project/${projectId}`}
-                  className="inline-block mt-3 text-sm text-[#CD477E] hover:underline"
+                  className="inline-block mt-3 text-sm text-[#E07020] hover:underline"
                 >
                   Start a new chat
                 </Link>
@@ -590,7 +590,7 @@ function ProjectDetailView() {
             <div className="mb-3">
               <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
                 <div
-                  className="h-full rounded-full bg-[#CD477E]"
+                  className="h-full rounded-full bg-[#E07020]"
                   style={{ width: `${capacityPercent}%` }}
                 />
               </div>
@@ -722,7 +722,7 @@ function ProjectDetailView() {
                     <button
                       onClick={handleAddMemory}
                       disabled={!newMemoryContent.trim() || memoryOperationLoading}
-                      className="px-4 py-1.5 text-sm rounded bg-[#CD477E] text-white disabled:opacity-50"
+                      className="px-4 py-1.5 text-sm rounded bg-[#E07020] text-white disabled:opacity-50"
                     >
                       {memoryOperationLoading ? 'Adding...' : 'Add Memory'}
                     </button>
@@ -796,7 +796,7 @@ function ProjectDetailView() {
                                     <button
                                       onClick={handleUpdateMemory}
                                       disabled={memoryOperationLoading}
-                                      className="px-3 py-1.5 text-xs rounded bg-[#CD477E] text-white"
+                                      className="px-3 py-1.5 text-xs rounded bg-[#E07020] text-white"
                                     >
                                       {memoryOperationLoading ? 'Saving...' : 'Save'}
                                     </button>
@@ -953,7 +953,7 @@ function ProjectDetailView() {
               </h2>
               <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
                 Provide Claude with relevant instructions and information for chats within {project?.name}. This will work alongside{' '}
-                <a href="#" className="text-[#CD477E] hover:underline">user preferences</a>
+                <a href="#" className="text-[#E07020] hover:underline">user preferences</a>
                 {' '}and the selected style in a chat.
               </p>
               <textarea
@@ -977,7 +977,7 @@ function ProjectDetailView() {
                 </button>
                 <button
                   onClick={handleSaveInstructions}
-                  className="px-4 py-2 rounded-lg text-sm bg-[#CD477E] text-white"
+                  className="px-4 py-2 rounded-lg text-sm bg-[#E07020] text-white"
                 >
                   Save instructions
                 </button>

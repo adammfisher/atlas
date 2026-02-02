@@ -184,7 +184,7 @@ function FileViewerModal({ file, projectId, projectName, onClose }) {
               style={{
                 '--tw-prose-body': 'var(--text-primary)',
                 '--tw-prose-headings': 'var(--text-primary)',
-                '--tw-prose-links': '#CD477E',
+                '--tw-prose-links': '#E07020',
                 '--tw-prose-bold': 'var(--text-primary)',
                 '--tw-prose-code': 'var(--text-primary)',
                 '--tw-prose-pre-bg': 'var(--bg-tertiary)',

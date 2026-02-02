@@ -206,7 +206,7 @@ function ProjectsListPage() {
         {/* Projects Grid */}
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#CD477E]" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E07020]" />
           </div>
         ) : filteredProjects.length === 0 ? (
           <div className="text-center py-12">
@@ -216,7 +216,7 @@ function ProjectsListPage() {
             {!searchQuery && (
               <button
                 onClick={() => setShowNewProjectModal(true)}
-                className="mt-4 px-4 py-2 rounded-lg bg-[#CD477E] text-white text-sm"
+                className="mt-4 px-4 py-2 rounded-lg bg-[#E07020] text-white text-sm"
               >
                 Create your first project
               </button>
@@ -242,7 +242,7 @@ function ProjectsListPage() {
                   <Trash2 size={16} className="text-red-500" />
                 </button>
                 <h3
-                  className="text-base font-medium mb-1 group-hover:text-[#CD477E] transition-colors pr-8"
+                  className="text-base font-medium mb-1 group-hover:text-[#E07020] transition-colors pr-8"
                   style={{ color: 'var(--text-primary)' }}
                 >
                   {project.name}
@@ -299,7 +299,7 @@ function ProjectsListPage() {
               <button
                 onClick={handleCreateProject}
                 disabled={!newProjectName.trim() || isCreating}
-                className="px-4 py-2 rounded-lg text-sm bg-[#CD477E] text-white disabled:opacity-50"
+                className="px-4 py-2 rounded-lg text-sm bg-[#E07020] text-white disabled:opacity-50"
               >
                 {isCreating ? 'Creating...' : 'Create project'}
               </button>

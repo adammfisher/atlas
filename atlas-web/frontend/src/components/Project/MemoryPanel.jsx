@@ -130,7 +130,7 @@ function MemoryPanel({ memory, onRegenerate, projectId }) {
           <button
             onClick={handleRegenerate}
             disabled={isRegenerating}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#CD477E] text-white text-sm"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#E07020] text-white text-sm"
           >
             <RefreshCw size={14} className={isRegenerating ? 'animate-spin' : ''} />
             {isRegenerating ? 'Generating...' : 'Generate Memory'}
@@ -202,7 +202,7 @@ function MemoryPanel({ memory, onRegenerate, projectId }) {
                 ) : (
                   <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
                 )}
-                <Icon size={16} className="text-[#CD477E]" />
+                <Icon size={16} className="text-[#E07020]" />
                 <span className="flex-1 text-left text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                   {section.title}
                 </span>
@@ -243,7 +243,7 @@ function MemoryPanel({ memory, onRegenerate, projectId }) {
                         <button
                           onClick={() => handleSaveEdit(section.id)}
                           disabled={isSaving}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm bg-[#CD477E] text-white"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm bg-[#E07020] text-white"
                         >
                           <Save size={14} />
                           {isSaving ? 'Saving...' : 'Save'}
@@ -261,7 +261,7 @@ function MemoryPanel({ memory, onRegenerate, projectId }) {
                             onClick={() => handleStartEdit(section.id, content)}
                             className="flex items-center gap-1 text-xs transition-colors"
                             style={{ color: 'var(--text-muted)' }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = '#CD477E'}
+                            onMouseEnter={(e) => e.currentTarget.style.color = '#E07020'}
                             onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
                           >
                             <Edit3 size={12} />
@@ -276,7 +276,7 @@ function MemoryPanel({ memory, onRegenerate, projectId }) {
                           <button
                             onClick={() => handleStartEdit(section.id, '')}
                             className="mt-2 flex items-center gap-1 mx-auto text-xs transition-colors"
-                            style={{ color: '#CD477E' }}
+                            style={{ color: '#E07020' }}
                           >
                             <Edit3 size={12} />
                             Add content

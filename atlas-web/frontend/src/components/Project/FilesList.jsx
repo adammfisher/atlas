@@ -92,7 +92,7 @@ function FilesList({ files, onUpload, onTogglePin, onDelete }) {
         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
       >
         <div className="flex-shrink-0">
-          <Icon size={20} style={{ color: isPinned ? '#CD477E' : 'var(--text-muted)' }} />
+          <Icon size={20} style={{ color: isPinned ? '#E07020' : 'var(--text-muted)' }} />
         </div>
 
         <div className="flex-1 min-w-0">
@@ -109,7 +109,7 @@ function FilesList({ files, onUpload, onTogglePin, onDelete }) {
 
         {/* Pin indicator */}
         {isPinned && (
-          <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs" style={{ backgroundColor: 'rgba(205, 71, 126, 0.1)', color: '#CD477E' }}>
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full text-xs" style={{ backgroundColor: 'rgba(205, 71, 126, 0.1)', color: '#E07020' }}>
             <Pin size={10} />
             <span>Pinned</span>
           </div>
@@ -120,7 +120,7 @@ function FilesList({ files, onUpload, onTogglePin, onDelete }) {
           <button
             onClick={() => onTogglePin(file.fileId, isPinned)}
             className="p-1.5 rounded-lg transition-colors"
-            style={{ color: isPinned ? '#CD477E' : 'var(--text-muted)' }}
+            style={{ color: isPinned ? '#E07020' : 'var(--text-muted)' }}
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-primary)'}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             title={isPinned ? 'Unpin from context' : 'Pin to context'}
@@ -245,7 +245,7 @@ function FilesList({ files, onUpload, onTogglePin, onDelete }) {
       {pinnedFiles.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <Pin size={14} className="text-[#CD477E]" />
+            <Pin size={14} className="text-[#E07020]" />
             <h3 className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
               Pinned Files
             </h3>

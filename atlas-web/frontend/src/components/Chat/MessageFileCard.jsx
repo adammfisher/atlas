@@ -113,7 +113,7 @@ function getFileTypeInfo(mimeType, filename) {
 
   // Images
   if (mimeType?.startsWith('image/')) {
-    return { icon: Image, color: '#EC4899' } // Pink
+    return { icon: Image, color: '#E07020' } // Orange
   }
 
   // Default

@@ -143,7 +143,7 @@ function MarkdownRenderer({ content, fontFamily }) {
             <li className="leading-[1.6] pl-1" {...props} />
           ),
           a: ({ node, ...props }) => (
-            <a className="text-[#CD477E] hover:underline" target="_blank" rel="noopener noreferrer" {...props} />
+            <a className="text-[#E07020] hover:underline" target="_blank" rel="noopener noreferrer" {...props} />
           ),
           blockquote: ({ node, ...props }) => (
             <blockquote

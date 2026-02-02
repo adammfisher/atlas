@@ -944,7 +944,7 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
           {isLoadingMessages ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4" style={{ borderColor: '#CD477E' }} />
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-4" style={{ borderColor: '#E07020' }} />
                 <p style={{color: 'var(--text-muted)'}} className="text-sm">
                   Loading conversation...
                 </p>

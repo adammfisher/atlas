@@ -128,7 +128,7 @@
   width: 14px;
   height: 14px;
   position: relative;
-  --c: no-repeat linear-gradient(#CD477E 0 0);
+  --c: no-repeat linear-gradient(#E07020 0 0);
   background:
     var(--c) center/100% 3px,
     var(--c) center/3px 100%;

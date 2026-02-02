@@ -69,7 +69,7 @@ function SettingsModal({ isOpen, onClose }) {
                   onClick={() => handleColorModeChange(mode.id)}
                   className={`flex-1 rounded-xl border-2 transition-all overflow-hidden ${
                     colorMode === mode.id
-                      ? 'border-[#CD477E]'
+                      ? 'border-[#E07020]'
                       : 'border-[var(--border-color)] hover:border-opacity-40'
                   }`}
                 >
@@ -85,9 +85,9 @@ function SettingsModal({ isOpen, onClose }) {
                       <div className={`h-1.5 w-10 rounded ${mode.id === 'light' ? 'bg-[#D4D2CD]' : mode.id === 'auto' ? 'bg-gray-400' : 'bg-gray-600'}`} />
                     </div>
                     <div className={`mt-2 h-4 w-14 rounded ${
-                      mode.id === 'light' ? 'bg-[#CD477E]/30' :
-                      mode.id === 'auto' ? 'bg-[#CD477E]/40' :
-                      'bg-[#CD477E]'
+                      mode.id === 'light' ? 'bg-[#E07020]/30' :
+                      mode.id === 'auto' ? 'bg-[#E07020]/40' :
+                      'bg-[#E07020]'
                     }`} />
                   </div>
                   {/* Label */}
@@ -117,7 +117,7 @@ function SettingsModal({ isOpen, onClose }) {
                   onClick={() => handleFontChange(font.id)}
                   className={`flex-1 rounded-xl border-2 transition-all overflow-hidden ${
                     chatFont === font.id
-                      ? 'border-[#CD477E]'
+                      ? 'border-[#E07020]'
                       : 'border-[var(--border-color)] hover:border-opacity-40'
                   }`}
                 >

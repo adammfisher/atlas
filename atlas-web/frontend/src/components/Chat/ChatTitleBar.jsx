@@ -98,7 +98,7 @@ function ChatTitleBar({ onRename, onDelete, onAddToProject, artifactsCount = 0, 
           <Link
             to={`/project/${effectiveProjectId}/settings`}
             className="flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors group"
-            style={{ backgroundColor: 'rgba(205, 71, 126, 0.1)', color: '#CD477E' }}
+            style={{ backgroundColor: 'rgba(205, 71, 126, 0.1)', color: '#E07020' }}
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(205, 71, 126, 0.2)'}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(205, 71, 126, 0.1)'}
           >

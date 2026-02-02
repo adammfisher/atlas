@@ -307,7 +307,7 @@ function Sidebar() {
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
         >
-          <Plus size={16} className="text-[#CD477E]" />
+          <Plus size={16} className="text-[#E07020]" />
           <span className="text-[13px]">New chat</span>
         </button>
       </div>
@@ -351,7 +351,7 @@ function Sidebar() {
           <div className="mt-1">
             {isLoadingSessions ? (
               <div className="flex items-center gap-2 px-2 py-1.5">
-                <div className="animate-spin rounded-full h-3 w-3 border-b border-[#CD477E]" />
+                <div className="animate-spin rounded-full h-3 w-3 border-b border-[#E07020]" />
                 <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Loading chats...</p>
               </div>
             ) : filteredSessions.length === 0 ? (

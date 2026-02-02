@@ -146,7 +146,7 @@ function MCPSettingsModal({ isOpen, onClose }) {
                   </p>
                   <button
                     onClick={() => setShowAddForm(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#CD477E] text-white text-[13px] hover:bg-[#b33d6d] transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#E07020] text-white text-[13px] hover:bg-[#c05a10] transition-colors"
                   >
                     <Plus size={16} />
                     Add MCP Server
@@ -217,10 +217,10 @@ function MCPSettingsModal({ isOpen, onClose }) {
                             onClick={() => handleToggleEnabled(server)}
                             className={`px-3 py-1.5 text-[12px] rounded-lg transition-colors ${
                               server.enabled
-                                ? 'bg-[#CD477E]/20 text-[#CD477E]'
+                                ? 'bg-[#E07020]/20 text-[#E07020]'
                                 : 'border border-[var(--border-color)]'
                             }`}
-                            style={{ color: server.enabled ? '#CD477E' : 'var(--text-primary)' }}
+                            style={{ color: server.enabled ? '#E07020' : 'var(--text-primary)' }}
                           >
                             {server.enabled ? 'Disable' : 'Enable'}
                           </button>
@@ -258,7 +258,7 @@ function MCPSettingsModal({ isOpen, onClose }) {
                         value={newServer.name}
                         onChange={(e) => setNewServer({ ...newServer, name: e.target.value })}
                         placeholder="Knowledge Core"
-                        className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] text-[13px] outline-none focus:border-[#CD477E]"
+                        className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] text-[13px] outline-none focus:border-[#E07020]"
                         style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                       />
                     </div>
@@ -271,7 +271,7 @@ function MCPSettingsModal({ isOpen, onClose }) {
                         value={newServer.url}
                         onChange={(e) => setNewServer({ ...newServer, url: e.target.value })}
                         placeholder="http://localhost:3001"
-                        className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] text-[13px] outline-none focus:border-[#CD477E]"
+                        className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] text-[13px] outline-none focus:border-[#E07020]"
                         style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                       />
                     </div>
@@ -284,7 +284,7 @@ function MCPSettingsModal({ isOpen, onClose }) {
                         value={newServer.description}
                         onChange={(e) => setNewServer({ ...newServer, description: e.target.value })}
                         placeholder="Optional description"
-                        className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] text-[13px] outline-none focus:border-[#CD477E]"
+                        className="w-full px-3 py-2 rounded-lg border border-[var(--border-color)] text-[13px] outline-none focus:border-[#E07020]"
                         style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                       />
                     </div>
@@ -304,7 +304,7 @@ function MCPSettingsModal({ isOpen, onClose }) {
                       <button
                         onClick={handleAddServer}
                         disabled={!newServer.name || !newServer.url || saving}
-                        className="px-4 py-2 text-[13px] rounded-lg bg-[#CD477E] text-white hover:bg-[#b33d6d] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="px-4 py-2 text-[13px] rounded-lg bg-[#E07020] text-white hover:bg-[#c05a10] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {saving ? 'Adding...' : 'Add Server'}
                       </button>
@@ -321,7 +321,7 @@ function MCPSettingsModal({ isOpen, onClose }) {
                   style={{ color: 'var(--text-muted)' }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'
-                    e.currentTarget.style.borderColor = '#CD477E'
+                    e.currentTarget.style.borderColor = '#E07020'
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = 'transparent'
