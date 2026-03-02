@@ -279,17 +279,10 @@ function ChatInput({ onSend, disabled, placeholder = "Reply..." }) {
 
           {/* Right side - Model selector and Send */}
           <div className="flex items-center gap-1">
-            {/* Model selector hidden - currently only Haiku is enabled */}
-            {/* <ModelSelector
+            <ModelSelector
               isOpen={showModelSelector}
               onToggle={() => setShowModelSelector(!showModelSelector)}
-            /> */}
-            <span
-              className="text-[12px] px-2 py-1 rounded"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              Haiku 4.5
-            </span>
+            />
             <button
               onClick={handleSend}
               disabled={!canSend}
