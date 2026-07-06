@@ -113,7 +113,7 @@ async function executeTool(toolName, toolInput) {
 // Claude inference profiles (us. prefix for cross-region inference)
 const MODELS = {
   haiku: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-  sonnet: 'us.anthropic.claude-sonnet-4-6',
+  sonnet: 'us.anthropic.claude-sonnet-5',
 };
 
 // Default model for all requests

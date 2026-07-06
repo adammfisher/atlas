@@ -4,7 +4,7 @@ import { useChatStore } from '../../hooks/useChatStore'
 
 const MODELS = [
   { id: 'haiku', name: 'Haiku 4.5', description: 'Fast & efficient' },
-  { id: 'sonnet', name: 'Sonnet 4.6', description: 'Most powerful' },
+  { id: 'sonnet', name: 'Sonnet 5', description: 'Most powerful' },
 ]
 
 function ModelSelector({ isOpen, onToggle }) {
