@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { StopCircle } from 'lucide-react'
+import { StopCircle, Copy, Check, Download } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChatStore } from '../../hooks/useChatStore'
@@ -1037,6 +1037,41 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
 
 function MessageBubble({ message, isStreaming, steps, showSteps, isThinkingEnabled = false, fontFamily, onOpenArtifactInPanel, onViewKnowledgeArtifact, streamingArtifact, completedStreamingArtifacts = [] }) {
   const isUser = message.role === 'user'
+  const [copied, setCopied] = useState(false)
+
+  // Build a filename for downloading a message: first markdown heading, else a default
+  const getMessageDownloadFilename = () => {
+    const heading = message.content?.match(/^#\s+(.+)$/m)?.[1]
+    const base = (heading || 'atlas-response')
+      .replace(/[^\w\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .toLowerCase()
+      .slice(0, 60)
+    return `${base || 'atlas-response'}.md`
+  }
+
+  const handleDownloadMessage = () => {
+    const blob = new Blob([message.content || ''], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = getMessageDownloadFilename()
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleCopyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content || '')
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (e) {
+      console.error('Copy message failed:', e)
+    }
+  }
 
   // Parse message for artifacts (memoized to avoid re-parsing on every render)
   // CRITICAL: Skip parsing during streaming to avoid duplicate key issues
@@ -1250,6 +1285,29 @@ function MessageBubble({ message, isStreaming, steps, showSteps, isThinkingEnabl
               onOpenInPanel={onOpenArtifactInPanel}
             />
           )}
+        </div>
+      )}
+      {/* Message actions - Copy / Download (assistant messages, once streaming completes) */}
+      {!isStreaming && message.content && message.content.trim() !== '' && (
+        <div className="flex items-center gap-1 mt-2 -ml-1">
+          <button
+            onClick={handleCopyMessage}
+            title="Copy"
+            className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors hover:bg-[var(--bg-secondary)]"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            <span className="text-[11px]">{copied ? 'Copied' : 'Copy'}</span>
+          </button>
+          <button
+            onClick={handleDownloadMessage}
+            title="Download as Markdown"
+            className="flex items-center gap-1 px-2 py-1 rounded-md transition-colors hover:bg-[var(--bg-secondary)]"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <Download size={14} />
+            <span className="text-[11px]">Download</span>
+          </button>
         </div>
       )}
       {/* If no content yet but streaming an artifact, show the card */}
