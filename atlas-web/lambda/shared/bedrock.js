@@ -116,6 +116,34 @@ const MODELS = {
   sonnet: 'us.anthropic.claude-sonnet-5',
 };
 
+// Fallback model IDs used when the primary model returns AccessDeniedException.
+// Sonnet 5 is newly GA'd and its account entitlement can lag behind the agreement;
+// until AWS grants runtime access we transparently serve Sonnet 4.6. Once access is
+// granted the primary model is used automatically with no code change needed.
+const MODEL_FALLBACKS = {
+  'us.anthropic.claude-sonnet-5': 'us.anthropic.claude-sonnet-4-6',
+};
+
+/**
+ * Send a Bedrock command, transparently retrying with a fallback model if the
+ * requested model is not accessible for this account (AccessDeniedException).
+ * @param {object} commandParams - Converse/ConverseStream params (modelId mutated on fallback)
+ * @param {Function} CommandClass - ConverseCommand or ConverseStreamCommand
+ */
+async function sendWithModelFallback(commandParams, CommandClass) {
+  try {
+    return await bedrockClient.send(new CommandClass(commandParams));
+  } catch (error) {
+    const fallback = MODEL_FALLBACKS[commandParams.modelId];
+    if (error.name === 'AccessDeniedException' && fallback) {
+      console.warn(`[bedrock] ${commandParams.modelId} unavailable (${error.name}); falling back to ${fallback}`);
+      commandParams.modelId = fallback;
+      return await bedrockClient.send(new CommandClass(commandParams));
+    }
+    throw error;
+  }
+}
+
 // Default model for all requests
 const DEFAULT_MODEL = 'haiku';
 
@@ -771,8 +799,7 @@ async function* streamChat(options) {
     commandParams.toolConfig = { tools };
   }
 
-  const command = new ConverseStreamCommand(commandParams);
-  const response = await bedrockClient.send(command);
+  const response = await sendWithModelFallback(commandParams, ConverseStreamCommand);
 
   for await (const event of response.stream) {
     if (event.contentBlockStart) {
@@ -823,7 +850,7 @@ async function chat(options) {
 
   const modelId = MODELS[model] || MODELS.haiku;
 
-  const command = new ConverseCommand({
+  const commandParams = {
     modelId,
     messages,
     system: [{ text: systemPrompt }],
@@ -831,9 +858,9 @@ async function chat(options) {
       maxTokens,
       temperature: 0.7
     }
-  });
+  };
 
-  const response = await bedrockClient.send(command);
+  const response = await sendWithModelFallback(commandParams, ConverseCommand);
   return response.output.message.content[0].text;
 }
 
@@ -1122,10 +1149,9 @@ async function* streamChatWithTools(options) {
       };
     }
 
-    const command = new ConverseStreamCommand(commandParams);
     let response;
     try {
-      response = await bedrockClient.send(command);
+      response = await sendWithModelFallback(commandParams, ConverseStreamCommand);
     } catch (error) {
       console.error('[streamChatWithTools] Bedrock error:', error.message);
       console.error('[streamChatWithTools] Messages structure:', JSON.stringify(messages, null, 2));
