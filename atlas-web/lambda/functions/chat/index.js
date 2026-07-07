@@ -5,7 +5,7 @@ const {
   compactConversation
 } = require('./shared/bedrock');
 const { getItem, putItem, queryItems, updateItem } = require('./shared/dynamodb');
-const { getContent, uploadContent, getContentType } = require('./shared/s3');
+const { getContent, uploadContent, getContentType, getDownloadUrl } = require('./shared/s3');
 const {
   success,
   badRequest,
@@ -398,6 +398,27 @@ async function handleStreamingChatWithStream(userId, event, responseStream) {
     base64: f.base64
   }));
 
+  // Persist attached files to S3 so they remain downloadable from the message later.
+  // Stored under a user-scoped key for isolation; s3Key is saved on the message.
+  const uploadedFiles = [];
+  for (let i = 0; i < processedFiles.length; i++) {
+    const f = processedFiles[i];
+    if (!f.base64) continue;
+    const safeName = (f.name || `file-${i}`).replace(/[^\w.\-]+/g, '_');
+    const s3Key = `users/${userId}/sessions/${activeSessionId}/${Date.now()}-${i}-${safeName}`;
+    try {
+      await uploadContent(UPLOADS_BUCKET, s3Key, Buffer.from(f.base64, 'base64'), f.type || getContentType(f.name || 'file'));
+      uploadedFiles.push({
+        name: f.name,
+        type: f.type || getContentType(f.name || 'file'),
+        size: Math.round((f.base64.length * 3) / 4),
+        s3Key
+      });
+    } catch (e) {
+      console.error(`[Uploads] Failed to persist attachment "${f.name}":`, e.message);
+    }
+  }
+
   // Filter out history messages with empty content before building messages
   // IMPORTANT: Keep user messages even if empty to maintain conversation structure
   // (user may have sent files without text - Bedrock requires user message first)
@@ -429,8 +450,23 @@ async function handleStreamingChatWithStream(userId, event, responseStream) {
     messageId: userMessageId,
     role: 'user',
     content: message,
+    files: uploadedFiles,
     timestamp: Date.now()
   });
+
+  // Emit persisted attachment metadata (with presigned download URLs) so the client
+  // can attach a download link to the just-sent message.
+  if (uploadedFiles.length > 0) {
+    try {
+      const filesWithUrls = await Promise.all(uploadedFiles.map(async (ff) => ({
+        ...ff,
+        download_url: await getDownloadUrl(UPLOADS_BUCKET, ff.s3Key, 3600, ff.name)
+      })));
+      responseStream.write(`data: ${JSON.stringify({ type: 'user_files', messageId: userMessageId, files: filesWithUrls })}\n\n`);
+    } catch (e) {
+      console.error('[Uploads] Failed to emit user_files event:', e.message);
+    }
+  }
 
   // Notify client that we're processing files
   if (messageFiles.length > 0) {
@@ -867,6 +903,27 @@ async function handleStreamingChat(userId, event) {
     base64: f.base64
   }));
 
+  // Persist attached files to S3 so they remain downloadable from the message later.
+  // Stored under a user-scoped key for isolation; s3Key is saved on the message.
+  const uploadedFiles = [];
+  for (let i = 0; i < processedFiles.length; i++) {
+    const f = processedFiles[i];
+    if (!f.base64) continue;
+    const safeName = (f.name || `file-${i}`).replace(/[^\w.\-]+/g, '_');
+    const s3Key = `users/${userId}/sessions/${activeSessionId}/${Date.now()}-${i}-${safeName}`;
+    try {
+      await uploadContent(UPLOADS_BUCKET, s3Key, Buffer.from(f.base64, 'base64'), f.type || getContentType(f.name || 'file'));
+      uploadedFiles.push({
+        name: f.name,
+        type: f.type || getContentType(f.name || 'file'),
+        size: Math.round((f.base64.length * 3) / 4),
+        s3Key
+      });
+    } catch (e) {
+      console.error(`[Uploads] Failed to persist attachment "${f.name}":`, e.message);
+    }
+  }
+
   // Build messages
   const messages = buildMessages(
     recentHistory.map(m => ({ role: m.role, content: m.content })),
@@ -882,8 +939,23 @@ async function handleStreamingChat(userId, event) {
     messageId: userMessageId,
     role: 'user',
     content: message,
+    files: uploadedFiles,
     timestamp: Date.now()
   });
+
+  // Emit persisted attachment metadata (with presigned download URLs) so the client
+  // can attach a download link to the just-sent message.
+  if (uploadedFiles.length > 0) {
+    try {
+      const filesWithUrls = await Promise.all(uploadedFiles.map(async (ff) => ({
+        ...ff,
+        download_url: await getDownloadUrl(UPLOADS_BUCKET, ff.s3Key, 3600, ff.name)
+      })));
+      events.push(sseEvent({ type: 'user_files', messageId: userMessageId, files: filesWithUrls }));
+    } catch (e) {
+      console.error('[Uploads] Failed to emit user_files event:', e.message);
+    }
+  }
 
   // Stream response
   let fullResponse = '';

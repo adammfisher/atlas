@@ -154,6 +154,28 @@ export const useChatStore = create(
         }
       }),
 
+      // Attach backend file metadata (s3Key + presigned download_url) onto the
+      // most recent user message's files, so its download icons work immediately.
+      attachFilesToLastUserMessage: (files, explicitSessionId = null) => set((state) => {
+        const sessionId = explicitSessionId || state.currentSessionId
+        if (!sessionId || !files || files.length === 0) return state
+        const messages = [...(state.messagesBySession[sessionId] || [])]
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === 'user') {
+            const existing = messages[i].files || []
+            const merged = files.map((bf, idx) => ({ ...(existing[idx] || {}), ...bf }))
+            messages[i] = { ...messages[i], files: merged }
+            break
+          }
+        }
+        return {
+          messagesBySession: {
+            ...state.messagesBySession,
+            [sessionId]: messages
+          }
+        }
+      }),
+
       setMessageStreaming: (isStreaming, explicitSessionId = null) => set((state) => {
         const sessionId = explicitSessionId || state.currentSessionId
         if (!sessionId) return state

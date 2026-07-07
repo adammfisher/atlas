@@ -197,7 +197,7 @@ export const chatService = {
     await this._processStream(response, onChunk, onComplete, onThinking, onSearchStart, onSearchResults, onProcessing, onArtifact, onKnowledgeContext, onMemoryContext, onCompaction)
   },
 
-  async streamMessageWithFiles(message, files, sessionId, projectId, model = 'sonnet', webSearchEnabled = true, enabledConnectors = [], existingArtifacts = [], onChunk, onComplete, onThinking = null, onSearchStart = null, onSearchResults = null, onProcessing = null, onArtifact = null, onMemoryContext = null, onCompaction = null, signal = null) {
+  async streamMessageWithFiles(message, files, sessionId, projectId, model = 'sonnet', webSearchEnabled = true, enabledConnectors = [], existingArtifacts = [], onChunk, onComplete, onThinking = null, onSearchStart = null, onSearchResults = null, onProcessing = null, onArtifact = null, onMemoryContext = null, onCompaction = null, signal = null, onUserFiles = null) {
     // Convert files to base64 and send as JSON to Lambda Function URL for true streaming
     const url = STREAM_URL || `${API_URL}/api/chat/message/with-files/stream`
     const isLambdaUrl = STREAM_URL && url.includes('lambda-url')
@@ -238,7 +238,7 @@ export const chatService = {
       signal
     }))
     checkResponse(response, 'send message with files')
-    await this._processStream(response, onChunk, onComplete, onThinking, onSearchStart, onSearchResults, onProcessing, onArtifact, null, onMemoryContext, onCompaction)
+    await this._processStream(response, onChunk, onComplete, onThinking, onSearchStart, onSearchResults, onProcessing, onArtifact, null, onMemoryContext, onCompaction, onUserFiles)
   },
 
   _fileToBase64(file) {
@@ -254,7 +254,7 @@ export const chatService = {
     })
   },
 
-  async _processStream(response, onChunk, onComplete, onThinking = null, onSearchStart = null, onSearchResults = null, onProcessing = null, onArtifact = null, onKnowledgeContext = null, onMemoryContext = null, onCompaction = null) {
+  async _processStream(response, onChunk, onComplete, onThinking = null, onSearchStart = null, onSearchResults = null, onProcessing = null, onArtifact = null, onKnowledgeContext = null, onMemoryContext = null, onCompaction = null, onUserFiles = null) {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -302,6 +302,7 @@ export const chatService = {
             else if (data.type === 'compaction' && onCompaction) {
               onCompaction(data)
             }
+            else if (data.type === 'user_files' && onUserFiles) onUserFiles(data.files, data.messageId)
             else if (data.type === 'done') onComplete(data)
             else if (data.type === 'error') console.error('Stream error:', data.message)
           } catch (e) { /* ignore */ }

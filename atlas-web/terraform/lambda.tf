@@ -108,6 +108,7 @@ resource "aws_lambda_function" "sessions" {
       MESSAGES_TABLE   = aws_dynamodb_table.messages.name
       ARTIFACTS_TABLE  = aws_dynamodb_table.artifacts.name
       ARTIFACTS_BUCKET = aws_s3_bucket.artifacts.id
+      UPLOADS_BUCKET   = aws_s3_bucket.uploads.id
       JWT_SECRET       = data.aws_ssm_parameter.jwt_secret.value
       ALLOW_DEV_AUTH   = var.allow_dev_auth
     }

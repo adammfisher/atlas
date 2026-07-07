@@ -1,5 +1,5 @@
 const { getItem, putItem, updateItem, deleteItem, queryItems, batchDeleteItems } = require('./shared/dynamodb');
-const { deleteObject } = require('./shared/s3');
+const { deleteObject, getDownloadUrl } = require('./shared/s3');
 const {
   success,
   created,
@@ -24,6 +24,7 @@ const SESSIONS_TABLE = process.env.SESSIONS_TABLE;
 const MESSAGES_TABLE = process.env.MESSAGES_TABLE;
 const ARTIFACTS_TABLE = process.env.ARTIFACTS_TABLE;
 const ARTIFACTS_BUCKET = process.env.ARTIFACTS_BUCKET;
+const UPLOADS_BUCKET = process.env.UPLOADS_BUCKET;
 
 /**
  * Main handler
@@ -130,17 +131,33 @@ async function getSessionMessages(userId, sessionId) {
     values: { ':sessionId': sessionId }
   });
   
-  return success({
-    sessionId,
-    messages: messages.map(m => ({
+  // Generate a fresh presigned download URL for each attached file that was
+  // persisted to S3 (presigned URLs expire, so they must be regenerated on read).
+  const messagesOut = await Promise.all(messages.map(async (m) => {
+    let files = m.files || [];
+    if (files.length && UPLOADS_BUCKET) {
+      files = await Promise.all(files.map(async (f) => {
+        if (f && f.s3Key) {
+          try {
+            return { ...f, download_url: await getDownloadUrl(UPLOADS_BUCKET, f.s3Key, 3600, f.name) };
+          } catch (e) {
+            console.error(`Failed to presign upload ${f.s3Key}:`, e.message);
+          }
+        }
+        return f;
+      }));
+    }
+    return {
       id: m.messageId,
       role: m.role,
       content: m.content,
       thinking: m.thinking || null,
-      files: m.files || [],
+      files,
       timestamp: m.timestamp
-    }))
-  });
+    };
+  }));
+
+  return success({ sessionId, messages: messagesOut });
 }
 
 /**

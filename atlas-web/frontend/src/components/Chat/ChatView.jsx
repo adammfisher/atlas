@@ -45,6 +45,7 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
     sessions,
     addMessage,
     updateLastMessage,
+    attachFilesToLastUserMessage,
     setMessageStreaming,
     updateLastMessageThinkingSteps,
     setCurrentSession,
@@ -689,7 +690,8 @@ function ChatView({ onToggleArtifacts, artifactsCount = 0, existingArtifacts = [
           handleArtifact,
           handleMemoryContext,
           handleCompaction,
-          signal
+          signal,
+          (uploadedFiles) => attachFilesToLastUserMessage(uploadedFiles, activeSessionId)
         )
       } else {
         await chatService.streamMessage(

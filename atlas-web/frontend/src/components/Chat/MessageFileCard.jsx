@@ -1,5 +1,5 @@
 import React from 'react'
-import { FileText, FileSpreadsheet, File, Image, FileArchive, FileCode, Presentation } from 'lucide-react'
+import { FileText, FileSpreadsheet, File, Image, FileArchive, FileCode, Presentation, Download } from 'lucide-react'
 
 /**
  * File card component for displaying file attachments in chat messages
@@ -9,10 +9,35 @@ function MessageFileCard({ file }) {
   const isImage = file.type?.startsWith('image/')
   const ext = getFileExtension(file.name)
 
+  // Download the uploaded file from S3 via its presigned URL (present once the
+  // backend has persisted it). Shown as a hover icon in the card corner.
+  const handleDownload = (e) => {
+    e.stopPropagation()
+    if (!file.download_url) return
+    const a = document.createElement('a')
+    a.href = file.download_url
+    a.download = file.name || 'file'
+    a.rel = 'noopener noreferrer'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+
+  const DownloadOverlay = () =>
+    file.download_url ? (
+      <button
+        onClick={handleDownload}
+        title={`Download ${file.name || 'file'}`}
+        className="absolute top-1 right-1 p-1 rounded-md bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+      >
+        <Download size={13} />
+      </button>
+    ) : null
+
   // For images with preview, show the image
   if (isImage && file.previewUrl) {
     return (
-      <div className="relative flex-shrink-0 w-[100px] h-[80px] rounded-lg overflow-hidden border border-[var(--border-color)]">
+      <div className="group relative flex-shrink-0 w-[100px] h-[80px] rounded-lg overflow-hidden border border-[var(--border-color)]">
         <img
           src={file.previewUrl}
           alt={file.name}
@@ -24,6 +49,7 @@ function MessageFileCard({ file }) {
             {ext}
           </span>
         </div>
+        <DownloadOverlay />
       </div>
     )
   }
@@ -33,7 +59,7 @@ function MessageFileCard({ file }) {
 
   return (
     <div
-      className="relative flex-shrink-0 w-[100px] h-[80px] rounded-lg overflow-hidden border border-[var(--border-color)] flex flex-col"
+      className="group relative flex-shrink-0 w-[100px] h-[80px] rounded-lg overflow-hidden border border-[var(--border-color)] flex flex-col"
       style={{ backgroundColor: 'hsl(30,3.3%,11.8%)' }}
     >
       {/* File name at top */}
@@ -59,6 +85,7 @@ function MessageFileCard({ file }) {
           {ext || 'FILE'}
         </span>
       </div>
+      <DownloadOverlay />
     </div>
   )
 }
