@@ -1,5 +1,6 @@
 import React from 'react'
 import { Code, Download, AlertTriangle, Sparkles } from 'lucide-react'
+import { artifactsService } from '../../services/chatService'
 
 // Streaming artifact card - shows during artifact creation with yellow/orange styling
 export function StreamingArtifactCard({ artifact, onOpenInPanel }) {
@@ -82,28 +83,56 @@ function InlineArtifact({ artifact, onOpenInPanel }) {
     return labels[artifact.file_extension] || artifact.type?.toUpperCase() || 'Code'
   }
 
-  const handleDownload = (e) => {
+  const mimeTypes = {
+    '.md': 'text/markdown',
+    '.html': 'text/html',
+    '.svg': 'image/svg+xml',
+    '.json': 'application/json',
+    '.css': 'text/css',
+    '.js': 'text/javascript'
+  }
+
+  const downloadFilename = () =>
+    (artifact.title || artifact.name || 'artifact').replace(/\s+/g, '-').toLowerCase() + (artifact.file_extension || '.txt')
+
+  const blobDownload = (text) => {
+    const mimeType = mimeTypes[artifact.file_extension] || 'text/plain'
+    const url = URL.createObjectURL(new Blob([text], { type: mimeType }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = downloadFilename()
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleDownload = async (e) => {
     e.stopPropagation()
-    if (artifact.content) {
-      const mimeTypes = {
-        '.md': 'text/markdown',
-        '.html': 'text/html',
-        '.svg': 'image/svg+xml',
-        '.json': 'application/json',
-        '.css': 'text/css',
-        '.js': 'text/javascript'
-      }
-      const mimeType = mimeTypes[artifact.file_extension] || 'text/plain'
-      const blob = new Blob([artifact.content], { type: mimeType })
-      const url = URL.createObjectURL(blob)
+    // 1. Presigned S3 URL, if the artifact carries one (historical artifacts from the list API)
+    if (artifact.download_url) {
       const a = document.createElement('a')
-      a.href = url
-      const filename = (artifact.title || artifact.name || 'artifact').replace(/\s+/g, '-').toLowerCase() + artifact.file_extension
-      a.download = filename
+      a.href = artifact.download_url
+      a.download = downloadFilename()
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      return
+    }
+    // 2. Inline content (freshly streamed artifacts already hold their content)
+    if (artifact.content) {
+      blobDownload(artifact.content)
+      return
+    }
+    // 3. Otherwise pull the content from the backend, which serves it from S3
+    const sessionId = artifact.session_id || artifact.sessionId
+    if (artifact.id && sessionId) {
+      try {
+        const text = await artifactsService.getContent(sessionId, artifact.id)
+        blobDownload(text || '')
+      } catch (err) {
+        console.error('Artifact download failed:', err)
+      }
     }
   }
 
